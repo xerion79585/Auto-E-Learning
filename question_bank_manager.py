@@ -69,22 +69,38 @@ class QuestionBankManager:
     # ==========================
     # Logic
     # ==========================
-    def crawl_index(self):
-        print("\n🔍 正在抓取 Pixnet 首頁連結...")
+    def get_index_titles(self):
+        """
+        抓取首頁並建立 URL -> Title 的對照表
+        這比從內頁抓標題準確
+        """
+        print("🔍 [TitleMap] 正在分析首頁以取得正確標題...")
+        title_map = {}
         try:
-            resp = requests.get(INDEX_URL, headers=HEADERS)
+            resp = requests.get(INDEX_URL, headers=HEADERS, timeout=30)
             soup = BeautifulSoup(resp.text, 'html.parser')
-            
             links = soup.find_all('a', href=True)
-            found_count = 0
-            
             for a in links:
                 href = a['href']
                 text = a.get_text().strip()
                 if "roddayeye.pixnet.net/blog/post/" in href and "解答" in text:
-                    if href not in self.known_urls:
-                        self.pending_urls.add(href)
-                        found_count += 1
+                    title_map[href] = text
+            print(f"✅ [TitleMap] 取得 {len(title_map)} 筆標題")
+        except Exception as e:
+            print(f"⚠️ [TitleMap] 抓取失敗: {e}")
+        return title_map
+
+    def crawl_index(self):
+        print("\n🔍 正在抓取 Pixnet 首頁連結...")
+        try:
+            # 直接使用 get_index_titles 的邏輯
+            title_map = self.get_index_titles()
+            found_count = 0
+            
+            for href in title_map.keys():
+                if href not in self.known_urls:
+                    self.pending_urls.add(href)
+                    found_count += 1
             
             self.save_pending()
             print(f"✅ 首頁分析完成，新增 {found_count} 個待抓網址。")
@@ -111,10 +127,12 @@ class QuestionBankManager:
             print("⚠️ 沒有待處理的網址。請先執行 [1] 或 [3]。")
             return
 
+        # 先建立標題對照表 (確保標題正確)
+        self.title_map = self.get_index_titles()
+        
         total = len(self.pending_urls)
         print(f"\n🚀 [多線程模式] 開始下載並解析 {total} 個頁面 (Workers={MAX_WORKERS})...")
         
-        urls_to_remove = set()
         processed_count = 0
         new_q_count = 0
         
@@ -134,21 +152,18 @@ class QuestionBankManager:
                             with self.lock:
                                 self.questions_db.extend(q_list)
                                 self.known_urls.add(url)
-                                # 從 pending 中移除 (memory only here)
                                 self.pending_urls.discard(url)
                                 
                             new_q_count += len(q_list)
-                            print(f"[{processed_count}/{total}] ✅ {len(q_list)} 題 | {url.split('/')[-1]}")
+                            print(f"[{processed_count}/{total}] ✅ {len(q_list)} 題 | {q_list[0]['category']}")
                         else:
                             print(f"[{processed_count}/{total}] ⚠️ 無題目 | {url.split('/')[-1]}")
-                            # 即使失敗也當作處理完畢，以免卡住
                             with self.lock:
                                 self.pending_urls.discard(url)
                                 
                     except Exception as e:
                         print(f"[{processed_count}/{total}] ❌ 失敗: {url} ({e})")
                     
-                    # 定期存檔 (每 20 個)
                     if processed_count % 20 == 0:
                         self.save_db()
                         self.save_pending()
@@ -157,9 +172,8 @@ class QuestionBankManager:
             except KeyboardInterrupt:
                 print("\n🛑 使用者中斷！正在等待執行中的線程結束...")
                 executor.shutdown(wait=False)
-                raise  # Re-raise to break main loop
-
-        # Final save
+                raise
+ 
         self.save_db()
         self.save_pending()
         print(f"\n🎉 全部完成！共新增 {new_q_count} 題。")
@@ -169,8 +183,18 @@ class QuestionBankManager:
             resp = requests.get(url, headers=HEADERS, timeout=20)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            title = soup.find('h2', class_='post-title')
-            title_text = title.get_text().strip() if title else "未命名測驗"
+            # 優先從 title_map 取得正確標題 (若有)
+            title_text = "未命名測驗"
+            if hasattr(self, 'title_map') and url in self.title_map:
+                title_text = self.title_map[url]
+            else:
+                # Fallback: 嘗試從頁面抓取
+                t_selectors = ['h2.post-title', 'h1', '.title']
+                for sel in t_selectors:
+                    found = soup.select_one(sel)
+                    if found:
+                        title_text = found.get_text().strip()
+                        break
             
             table = soup.select_one('.article-content table, .article-content-inner table')
             if not table: return []
