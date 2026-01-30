@@ -120,6 +120,25 @@ class QuestionBankManager:
         # 3. 執行下載 (Scrape All)
         self.scrape_all(auto_push=True)
 
+    def add_manual_url(self):
+        """手動輸入網址 (Debug 用)"""
+        print("\n✏️  請輸入網址 (輸入空行結束):")
+        cnt = 0
+        while True:
+            url = input("> ").strip()
+            if not url: 
+                break
+            if url.startswith("http") and url not in self.known_urls:
+                self.pending_urls.add(url)
+                cnt += 1
+            elif url in self.known_urls:
+                print(f"   ⚠️ 此網址已存在資料庫中")
+        if cnt > 0:
+            self.save_pending()
+            print(f"✅ 已新增 {cnt} 個網址")
+        else:
+            print("ℹ️ 沒有新增任何網址")
+
     def scrape_all(self, auto_push=False):
         if not self.pending_urls:
             print("⚠️ 沒有待處理的網址。")
@@ -189,11 +208,18 @@ class QuestionBankManager:
         try:
             subprocess.check_call(["git", "add", "questions.json"])
             subprocess.check_call(["git", "commit", "-m", f"Auto Update: Added {count} new questions"])
-            subprocess.check_call(["git", "push"])
+            # 使用 -u 參數確保設定上游分支 (首次 push 必須)
+            subprocess.check_call(["git", "push", "-u", "origin", "main"])
             print("✅ GitHub 更新成功！")
+        except subprocess.CalledProcessError as e:
+            if e.returncode == 1:
+                # 可能是沒有任何變更需要 commit
+                print("ℹ️ 沒有變更需要上傳。")
+            else:
+                print(f"❌ 上傳失敗: {e}")
+                print("   請檢查網路或 Git 設定。")
         except Exception as e:
             print(f"❌ 上傳失敗: {e}")
-            print("   請檢查網路或 Git 設定。")
 
     def parse_single_page(self, url):
         try:
