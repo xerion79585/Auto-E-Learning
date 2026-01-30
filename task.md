@@ -9,7 +9,8 @@
     - [ ] Implement URL monitoring
     - [ ] Implement "Hang Time" injection logic
     - [ ] Implement "Exam Search" logic (Python-side fetching)
-    - [ ] Implement "Questionnaire" logic
+    - [x] Upload `questions.json` and tools to GitHub (`git push`)
+- [x] **Bonus**: Remove Password Lock from `run_bot.py` (Unrestricted Version)
 - [ ] Handle Cross-Platform compatibility (Mac/Windows)
 
 ## 3. Packaging
