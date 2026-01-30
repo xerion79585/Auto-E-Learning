@@ -184,7 +184,7 @@
             }
         }
 
-        // 3. Exam Logic (v13 - Replicating v12 UX)
+        // 3. Exam Logic (v13.2 - True Exam Grouping)
         if (url.includes('exam_start.php') && !url.includes('questionnaire')) {
             if (!document.getElementById('bot-exam-panel')) {
                 document.body.style.marginLeft = '450px';
@@ -198,16 +198,48 @@
                 });
 
                 panel.innerHTML = `
-                    <h3 style="margin:0 0 10px 0;">GitHub 題庫 (v13)</h3>
+                    <h3 style="margin:0 0 10px 0;">GitHub 題庫 (v13.2)</h3>
                     <div style="margin-bottom:10px;">
-                        <input type="text" id="bot-input-q" style="width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:4px;" placeholder="輸入測驗名稱...">
+                        <input type="text" id="bot-input-q" style="width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:4px;" placeholder="輸入測驗名稱或題目關鍵字...">
                         <button id="bot-btn-search" style="width:100%;margin-top:5px;padding:8px;background:#24292e;color:#fff;border:none;cursor:pointer;border-radius:4px;">🔍 搜尋測驗</button>
                     </div>
                     <div id="bot-res-area" style="font-size:13px;line-height:1.6;"></div>
                 `;
                 document.body.appendChild(panel);
 
-                // Auto Search on Open
+                // --- Global vars for this scope ---
+                let EXAM_INDEX = null; // Map<URL, {title, questions: [], tags: string}>
+
+                // Build Index (Group by URL)
+                function buildIndex(db) {
+                    const idx = new Map();
+                    db.forEach(item => {
+                        const url = item.source_url || 'UNKNOWN';
+                        if (!idx.has(url)) {
+                            let title = (item.category && item.category !== '未命名測驗') ? item.category : '未命名測驗';
+                            // If title is generic, try to append ID for distinction
+                            if (title === '未命名測驗' && url !== 'UNKNOWN') {
+                                const m = url.match(/post\/(\d+)/);
+                                if (m) title += ` (${m[1]})`;
+                            }
+
+                            idx.set(url, {
+                                title: title,
+                                url: url,
+                                questions: [],
+                                fullText: title.toLowerCase() // Search cache
+                            });
+                        }
+                        const entry = idx.get(url);
+                        entry.questions.push(item);
+                        // Add question text to search cache
+                        entry.fullText += ' ' + (item.question || '').toLowerCase();
+                    });
+                    console.log(`[AutoBot] Index Built: ${idx.size} exams`);
+                    return idx;
+                }
+
+                // Auto Search
                 setTimeout(() => {
                     let title = '';
                     const h = document.querySelector('h1, h2, .title') || document.querySelector('td.title');
@@ -220,23 +252,23 @@
                 }, 1000);
 
                 // --- Function: Render specific exam questions ---
-                function renderExamQuestions(questions, examTitle) {
+                function renderExamQuestions(examObj) {
                     const r = document.getElementById('bot-res-area');
 
                     let html = `
                         <div style="background:#d4edda;padding:10px;margin-bottom:10px;border-radius:5px;">
-                            <b>📚 ${examTitle}</b><br>
-                            <small>共 ${questions.length} 題</small>
-                            <button id="bot-back-btn" style="float:right;padding:2px 8px;font-size:11px;cursor:pointer;">↩ 返回</button>
+                            <b>📚 ${examObj.title}</b><br>
+                            <small>共 ${examObj.questions.length} 題</small>
+                            <button id="bot-back-btn" style="float:right;padding:2px 8px;font-size:11px;cursor:pointer;">↩ 返回列表</button>
                         </div>
-                        <div style="margin-bottom:10px;position:sticky;top:0;background:#f8f9fa;padding-bottom:5px;z-index:10;">
-                             <input type="text" id="bot-quick-search" placeholder="🔍 在此頁面內搜尋..." 
+                        <div style="margin-bottom:10px;position.sticky;top:0;background:#f8f9fa;padding-bottom:5px;z-index:10;">
+                             <input type="text" id="bot-quick-search" placeholder="🔍 在此題庫內搜尋..." 
                                     style="width:100%;padding:8px;font-size:13px;border:1px solid #ccc;border-radius:4px;">
                         </div>
                         <div id="bot-answer-list">
                     `;
 
-                    questions.forEach((item, i) => {
+                    examObj.questions.forEach((item, i) => {
                         let ansHtml = '';
                         if (item.options) {
                             item.options.forEach(opt => {
@@ -260,7 +292,9 @@
 
                     // Back Button
                     document.getElementById('bot-back-btn').onclick = () => {
-                        document.getElementById('bot-btn-search').click(); // Re-trigger search to show list
+                        // Trigger search again to show list (simple caching)
+                        const lastQ = document.getElementById('bot-input-q').value;
+                        doSearch(lastQ);
                     };
 
                     // Quick Search Logic
@@ -276,7 +310,7 @@
                             if (!kw || txt.includes(kw)) {
                                 card.style.display = 'block';
                                 if (kw && !first) first = card;
-                                if (kw) card.style.background = '#fef3c7'; // Highlight
+                                if (kw) card.style.background = '#fef3c7';
                                 else card.style.background = '#fff';
                             } else {
                                 card.style.display = 'none';
@@ -287,9 +321,8 @@
 
                     qInput.addEventListener('input', (e) => doQuickFilter(e.target.value));
 
-                    // Text Selection Listener
                     document.onmouseup = (e) => {
-                        if (e.target.closest('#bot-exam-panel')) return; // Ignore clicks inside panel
+                        if (e.target.closest('#bot-exam-panel')) return;
                         const sel = window.getSelection().toString().trim();
                         if (sel && sel.length > 1) {
                             qInput.value = sel;
@@ -298,99 +331,99 @@
                     };
                 }
 
-                // --- Search Button Logic ---
-                document.getElementById('bot-btn-search').onclick = async () => {
-                    const qRaw = document.getElementById('bot-input-q').value.trim();
+                // --- Search Logic ---
+                async function doSearch(qRaw) {
                     const resArea = document.getElementById('bot-res-area');
 
-                    // 1. Ensure DB loaded
+                    // 1. Ensure DB
                     if (!window.__BOT_DB) {
-                        const success = await loadDatabase(resArea);
-                        if (!success) return;
+                        const db = await loadDatabase(resArea);
+                        if (!db) return;
                     }
 
-                    if (!qRaw) return;
-                    const qNorm = qRaw.toLowerCase().replace(/\s+/g, '');
-                    const db = window.__BOT_DB;
+                    // 2. Build Index if needed
+                    if (!EXAM_INDEX) {
+                        resArea.innerHTML += '<div>⚙️ 正在建立索引...</div>';
+                        // Yield to UI
+                        await new Promise(r => setTimeout(r, 10));
+                        EXAM_INDEX = buildIndex(window.__BOT_DB);
+                    }
+
+                    if (!qRaw) {
+                        resArea.innerHTML = '';
+                        return;
+                    }
 
                     resArea.innerHTML = '<div style="color:blue">🔍 搜尋中...</div>';
+                    const qNorm = qRaw.toLowerCase().replace(/\s+/g, '');
 
-                    // 2. Group by Category (Exam Title)
-                    // We scan the DB to find unique matched categories
-                    const matches = new Map(); // Title -> [Questions]
-
-                    // Optimizations: Limit verify count if DB is huge? No, JS filter is fast enough for 50MB json usually.
-                    db.forEach(item => {
-                        const cat = (item.category || '未分類').trim();
-                        const catNorm = cat.toLowerCase().replace(/\s+/g, '');
-
-                        // Check if Category matches Query
-                        let isMatch = false;
-                        if (catNorm.includes(qNorm)) isMatch = true;
-
-                        // Bonus: If query matches question text, also include that exam?
-                        // User said "Search Exam Title" implies category search, but v12 also found posts by content.
-                        // Let's stick to category match primarily for grouping, but maybe add question match support?
-                        // If we do question match, we might get too many disparate categories.
-                        // Let's try strictly Category first.
-
-                        if (isMatch) {
-                            if (!matches.has(cat)) matches.set(cat, []);
-                            matches.get(cat).push(item);
+                    // 3. Search Index
+                    const results = [];
+                    EXAM_INDEX.forEach((exam) => {
+                        // Search in pre-built fullText (Title + Questions)
+                        if (exam.fullText.replace(/\s+/g, '').includes(qNorm)) {
+                            results.push(exam);
                         }
                     });
 
-                    // If strict category search failed, try looser search (question text match)
-                    if (matches.size === 0) {
-                        db.forEach(item => {
-                            const qText = (item.question || '').toLowerCase();
-                            if (qText.includes(qNorm)) {
-                                const cat = (item.category || '未分類').trim();
-                                if (!matches.has(cat)) matches.set(cat, []);
-                                matches.get(cat).push(item);
-                            }
-                        });
-                    }
-
-                    if (matches.size === 0) {
+                    if (results.length === 0) {
                         resArea.innerHTML = `<div style="color:red;padding:10px;background:#fee;">❌ 找不到符合「${qRaw}」的測驗</div>`;
                         return;
                     }
 
-                    // 3. Render List of Categories
-                    // Convert Map to Array for sorting
-                    const sortedCats = Array.from(matches.keys()).sort();
+                    // Sort by relevance? (Exact title match first)
+                    results.sort((a, b) => {
+                        const aTitle = a.title.toLowerCase();
+                        const bTitle = b.title.toLowerCase();
+                        if (aTitle.includes(qNorm) && !bTitle.includes(qNorm)) return -1;
+                        if (!aTitle.includes(qNorm) && bTitle.includes(qNorm)) return 1;
+                        return 0;
+                    });
 
-                    // If only 1 result, auto-click it
-                    if (sortedCats.length === 1) {
-                        renderExamQuestions(matches.get(sortedCats[0]), sortedCats[0]);
+                    // Auto-open if 1 result
+                    if (results.length === 1) {
+                        renderExamQuestions(results[0]);
                         return;
                     }
 
+                    // Render List
                     let html = `<div style="background:#fff3cd;padding:10px;margin-bottom:10px;border-radius:5px;">
-                                <b>🔍 找到 ${sortedCats.length} 個題庫</b><br>
-                                <small>請選擇符合的測驗：</small>
+                                <b>🔍 找到 ${results.length} 個相關測驗</b><br>
+                                <small>請點選以查看完整題庫：</small>
                                 </div>`;
 
-                    sortedCats.forEach((title, idx) => {
-                        const count = matches.get(title).length;
+                    results.forEach((exam, idx) => {
+                        // Highlight match type
+                        let note = '';
+                        if (exam.title.toLowerCase().replace(/\s+/g, '').includes(qNorm)) {
+                            note = '<span style="color:green">● 標題吻合</span>';
+                        } else {
+                            note = '<span style="color:#666">○ 內文吻合</span>';
+                        }
+
                         html += `
-                            <div class="bot-cat-item" data-title="${title}"
+                            <div class="bot-cat-item" data-url="${exam.url}"
                                  style="background:#fff;border:1px solid #ddd;border-radius:5px;padding:10px;margin-bottom:6px;cursor:pointer;transition:background 0.2s;">
-                                <div><span style="color:#333;font-weight:bold;">${idx + 1}. ${title}</span></div>
-                                <div style="font-size:11px;color:#666;margin-top:3px;">包含 ${count} 題</div>
+                                <div><span style="color:#333;font-weight:bold;">${idx + 1}. ${exam.title}</span></div>
+                                <div style="font-size:11px;color:#666;margin-top:3px;display:flex;justify-content:space-between;">
+                                    <span>${exam.questions.length} 題</span>
+                                    <span>${note}</span>
+                                </div>
                             </div>
                          `;
                     });
                     resArea.innerHTML = html;
 
-                    // Bind Clicks
                     resArea.querySelectorAll('.bot-cat-item').forEach(el => {
                         el.onclick = () => {
-                            const t = el.getAttribute('data-title');
-                            renderExamQuestions(matches.get(t), t);
+                            const u = el.dataset.url;
+                            renderExamQuestions(EXAM_INDEX.get(u));
                         };
                     });
+                }
+
+                document.getElementById('bot-btn-search').onclick = () => {
+                    doSearch(document.getElementById('bot-input-q').value.trim());
                 };
             }
         }

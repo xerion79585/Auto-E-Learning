@@ -1,8 +1,45 @@
+
+# Python
 __pycache__/
-*.pyc
-.DS_Store
-dist/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
-*.spec
-venv/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
 .env
+.venv
+venv/
+ENV/
+env/
+
+# Mac
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Agent Artifacts (User requested cleanup)
+*.md
+*.png
+*.resolved
+*.resolved.*
+*.metadata.json
+pending_urls.txt
