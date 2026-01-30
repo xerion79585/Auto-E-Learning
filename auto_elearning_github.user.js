@@ -41,32 +41,80 @@
     }
 
     // Load Database (with progress for user)
-    async function loadDatabase(statusDiv) {
-        if (window.__BOT_DB) return window.__BOT_DB;
-        if (window.__BOT_LOADING) {
-            while (window.__BOT_LOADING) await new Promise(r => setTimeout(r, 200));
-            return window.__BOT_DB;
-        }
+    function loadDatabase(statusDiv) {
+        return new Promise((resolve) => {
+            if (window.__BOT_DB) {
+                resolve(window.__BOT_DB);
+                return;
+            }
+            if (window.__BOT_LOADING) {
+                // Simple polling if already loading
+                const check = setInterval(() => {
+                    if (window.__BOT_DB) {
+                        clearInterval(check);
+                        resolve(window.__BOT_DB);
+                    }
+                }, 200);
+                return;
+            }
 
-        window.__BOT_LOADING = true;
-        if (statusDiv) statusDiv.innerHTML = '<div style="color:blue">☁️ 正在連線 GitHub (約 50MB)...<br>第一次會比較久，請稍候</div>';
+            window.__BOT_LOADING = true;
+            statusDiv.innerHTML = `
+                <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫 (約 55MB)...</div>
+                <div style="width:100%;background:#eee;border-radius:4px;height:10px;overflow:hidden;">
+                    <div id="bot-dl-progress" style="width:0%;height:100%;background:#28a745;transition:width 0.2s;"></div>
+                </div>
+                <div id="bot-dl-text" style="font-size:11px;color:#666;text-align:right;">0%</div>
+            `;
 
-        try {
             console.log('[AutoBot] Fetching DB from:', DB_URL);
-            const resp = await fetch(DB_URL);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const json = await resp.json();
-            window.__BOT_DB = json;
-            console.log(`[AutoBot] DB Loaded: ${json.length} items`);
-            if (statusDiv) statusDiv.innerHTML = `<div style="color:green">✅ 題庫下載完成 (共 ${json.length} 題)</div>`;
-            return json;
-        } catch (e) {
-            console.error(e);
-            if (statusDiv) statusDiv.innerHTML = `<div style="color:red">❌ GitHub 連線失敗: ${e.message}</div>`;
-            return null;
-        } finally {
-            window.__BOT_LOADING = false;
-        }
+
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: DB_URL,
+                responseType: "json", // Auto parse JSON
+                onprogress: (e) => {
+                    if (e.lengthComputable) {
+                        const pct = Math.floor((e.loaded / e.total) * 100);
+                        const pBar = document.getElementById('bot-dl-progress');
+                        const pTxt = document.getElementById('bot-dl-text');
+                        if (pBar) pBar.style.width = pct + '%';
+                        if (pTxt) pTxt.innerText = `${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB / ${(e.total / 1024 / 1024).toFixed(1)}MB)`;
+                    } else {
+                        // Fallback if no total size
+                        const mb = (e.loaded / 1024 / 1024).toFixed(1);
+                        const pTxt = document.getElementById('bot-dl-text');
+                        if (pTxt) pTxt.innerText = `已下載 ${mb} MB...`;
+                    }
+                },
+                onload: (response) => {
+                    try {
+                        let json = response.response;
+                        // Fallback parse if responseType didn't work (Tampermonkey version dependent)
+                        if (typeof json === 'string') {
+                            json = JSON.parse(json);
+                        }
+
+                        window.__BOT_DB = json;
+                        console.log(`[AutoBot] DB Loaded: ${json.length} items`);
+                        statusDiv.innerHTML = `<div style="color:green">✅ 題庫下載完成 (共 ${json.length} 題) / 準備建立索引...</div>`;
+                        setTimeout(() => resolve(json), 100); // Give UI a moment to update
+                    } catch (err) {
+                        console.error(err);
+                        statusDiv.innerHTML = `<div style="color:red">❌ 解析失敗: ${err.message}</div>`;
+                        resolve(null);
+                    } finally {
+                        window.__BOT_LOADING = false;
+                    }
+                },
+                onerror: (err) => {
+                    console.error(err);
+                    statusDiv.innerHTML = `<div style="color:red">❌ 下載失敗: 網路錯誤</div>`;
+                    window.__BOT_LOADING = false;
+                    resolve(null);
+                }
+            });
+        });
     }
 
     // ==========================================
