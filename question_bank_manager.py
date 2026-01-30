@@ -90,53 +90,51 @@ class QuestionBankManager:
             print(f"⚠️ [TitleMap] 抓取失敗: {e}")
         return title_map
 
-    def crawl_index(self):
-        print("\n🔍 正在抓取 Pixnet 首頁連結...")
-        try:
-            # 直接使用 get_index_titles 的邏輯
-            title_map = self.get_index_titles()
-            found_count = 0
-            
-            for href in title_map.keys():
-                if href not in self.known_urls:
-                    self.pending_urls.add(href)
-                    found_count += 1
-            
-            self.save_pending()
-            print(f"✅ 首頁分析完成，新增 {found_count} 個待抓網址。")
-            print(f"   (目前總計待抓: {len(self.pending_urls)})")
-            
-        except Exception as e:
-            print(f"❌ 抓取首頁失敗: {e}")
-
-    def add_manual_url(self):
-        print("\n✏️  請輸入網址 (輸入空行結束):")
-        cnt = 0
-        while True:
-            url = input("> ").strip()
-            if not url: break
-            if url.startswith("http") and url not in self.known_urls:
-                self.pending_urls.add(url)
-                cnt += 1
-        if cnt > 0:
-            self.save_pending()
-            print(f"✅ 已新增 {cnt} 個網址")
-
-    def scrape_all(self):
-        if not self.pending_urls:
-            print("⚠️ 沒有待處理的網址。請先執行 [1] 或 [3]。")
+    def auto_update_workflow(self):
+        """
+        [一鍵更新] 整合流程：
+        1. 抓取首頁連結 & 標題
+        2. 比對資料庫，找出新網址
+        3. 下載並解析新題目
+        4. 自動上傳到 GitHub
+        """
+        print("\n🚀 [一鍵更新] 開始自動化流程...")
+        
+        # 1. 取得最新標題與連結
+        title_map = self.get_index_titles()
+        self.title_map = title_map
+        
+        # 2. 找出尚未收錄的網址 (去重核心邏輯)
+        new_urls = []
+        for href in title_map.keys():
+            if href not in self.known_urls:
+                new_urls.append(href)
+                self.pending_urls.add(href)
+        
+        print(f"📊 分析結果: {len(title_map)} 總連結, {len(new_urls)} 個新連結待抓取")
+        
+        if not new_urls and not self.pending_urls:
+            print("✨ 目前資料庫已是最新，無需更新。")
             return
 
-        # 先建立標題對照表 (確保標題正確)
-        self.title_map = self.get_index_titles()
-        
+        # 3. 執行下載 (Scrape All)
+        self.scrape_all(auto_push=True)
+
+    def scrape_all(self, auto_push=False):
+        if not self.pending_urls:
+            print("⚠️ 沒有待處理的網址。")
+            return
+
+        # 若沒先跑過 auto_update_workflow，這邊也嘗試拿一下 title_map
+        if not hasattr(self, 'title_map'):
+             self.title_map = self.get_index_titles()
+
         total = len(self.pending_urls)
-        print(f"\n🚀 [多線程模式] 開始下載並解析 {total} 個頁面 (Workers={MAX_WORKERS})...")
+        print(f"\n🚀 [下載] 開始下載並解析 {total} 個頁面 (Workers={MAX_WORKERS})...")
         
         processed_count = 0
         new_q_count = 0
         
-        # 使用 ThreadPoolExecutor 並發執行
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
             future_to_url = {executor.submit(self.parse_single_page, url): url for url in list(self.pending_urls)}
             
@@ -148,10 +146,12 @@ class QuestionBankManager:
                     try:
                         q_list = future.result()
                         if q_list:
-                            # 寫入資料需要上鎖
                             with self.lock:
-                                self.questions_db.extend(q_list)
-                                self.known_urls.add(url)
+                                # 二次去重檢查：雖然 url 不在 known_urls，但以防萬一
+                                if url not in self.known_urls:
+                                    self.questions_db.extend(q_list)
+                                    self.known_urls.add(url)
+                                
                                 self.pending_urls.discard(url)
                                 
                             new_q_count += len(q_list)
@@ -176,19 +176,34 @@ class QuestionBankManager:
  
         self.save_db()
         self.save_pending()
-        print(f"\n🎉 全部完成！共新增 {new_q_count} 題。")
+        print(f"\n🎉 下載完成！共新增 {new_q_count} 題。")
+        
+        if auto_push and new_q_count > 0:
+            self.push_to_github(new_q_count)
+        elif auto_push:
+            print("ℹ️ 無新題目，略過 GitHub 上傳。")
+
+    def push_to_github(self, count):
+        print("\n☁️ [Git] 正在上傳至 GitHub...")
+        import subprocess
+        try:
+            subprocess.check_call(["git", "add", "questions.json"])
+            subprocess.check_call(["git", "commit", "-m", f"Auto Update: Added {count} new questions"])
+            subprocess.check_call(["git", "push"])
+            print("✅ GitHub 更新成功！")
+        except Exception as e:
+            print(f"❌ 上傳失敗: {e}")
+            print("   請檢查網路或 Git 設定。")
 
     def parse_single_page(self, url):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=20)
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            # 優先從 title_map 取得正確標題 (若有)
             title_text = "未命名測驗"
             if hasattr(self, 'title_map') and url in self.title_map:
                 title_text = self.title_map[url]
             else:
-                # Fallback: 嘗試從頁面抓取
                 t_selectors = ['h2.post-title', 'h1', '.title']
                 for sel in t_selectors:
                     found = soup.select_one(sel)
@@ -221,7 +236,11 @@ class QuestionBankManager:
                 content = content_cell.get_text(strip=True)
                 
                 # Filter junk
-                if 'roddayeye' in content or not content: continue
+                if not content: continue
+                
+                # Clean Watermarks
+                content = content.replace("r.o.d.d.a.y.e.y.e.", "").replace("roddayeye", "").strip()
+                if not content: continue
                 
                 if marker == 'Q':
                     if current_q: extracted_qs.append(current_q)
@@ -243,37 +262,38 @@ class QuestionBankManager:
             
             if current_q: extracted_qs.append(current_q)
             return extracted_qs
-
+    
         except Exception as e:
-            # print(f"parse error: {e}") 
             return []
 
     def main_loop(self):
         while True:
-            print("\n=================================")
-            print("   Pixnet 題庫抓取工具 (CLI版)")
-            print("=================================")
-            print("1. 抓取首頁全部連結 (Crawl Index)")
-            print("2. 開始下載並解析題目 (Scrape All Pending)")
-            print("3. 手動輸入網址 (Add Manual URL)")
-            print("4. 匯出/顯示統計 (Stats)")
-            print("q. 離開 (Quit)")
+            print("\n======================================")
+            print("   Pixnet 題庫自動化管理器 (v2)")
+            print("======================================")
+            print("1. 🚀 一鍵自動更新 (抓取+下載+上傳)")
+            print("2. 📊 查看目前題庫狀態")
+            print("3. 🔧 手動輸入網址 (Debug用)")
+            print("q. 離開")
             
-            choice = input("\n請選擇功能 [1-4, q]: ").strip().lower()
+            choice = input("\n請選擇功能 [1, 2, 3, q]: ").strip().lower()
             
             if choice == '1':
-                self.crawl_index()
+                self.auto_update_workflow()
             elif choice == '2':
-                self.scrape_all()
+                print(f"目前資料庫共 {len(self.questions_db)} 題")
+                print(f"已知網址 (包含已抓取): {len(self.known_urls)} 個")
+                print(f" pending_urls (佇列中): {len(self.pending_urls)} 個")
             elif choice == '3':
                 self.add_manual_url()
-            elif choice == '4':
-                print(f"目前資料庫共 {len(self.questions_db)} 題")
-                print(f"待抓取網址: {len(self.pending_urls)} 個")
+                # 手動加入後詢問是否立即下載
+                if input("是否立即下載? (y/n): ").lower() == 'y':
+                    self.scrape_all(auto_push=False)
             elif choice == 'q':
                 break
             else:
                 print("無效輸入")
+
 
 if __name__ == "__main__":
     app = QuestionBankManager()
