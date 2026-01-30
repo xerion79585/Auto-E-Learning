@@ -1,85 +1,17 @@
 import time
 import os
 import sys
-import hashlib
-import uuid
 import subprocess
 from playwright.sync_api import sync_playwright
 
 # ===========================================================================
-# Auto-E-Learning Bot v12 (Secure Edition)
+# Auto-E-Learning Bot v12 (Standard Edition)
 # ===========================================================================
 # 
-# 新增功能：
-# 1. 🛡️ 機器綁定鎖 (MachineLock): 
-#    - 首次在電腦執行需輸入密碼 (預設: AutoBot2026)
-#    - 驗證後自動產生隱藏授權檔，下次開啟免密碼
-#    - 換電腦需重新驗證
-# 2. 🔧 自動環境安裝:
-#    - 自動檢查並下載 Playwright 瀏覽器 (無需手動安裝)
-# 3. 🔍 包含 v11 所有搜尋功能 (多選單、快速搜尋、反光特效)
+# 功能：
+# 1. 🔧 自動環境安裝: 自動檢查並下載 Playwright 瀏覽器
+# 2. 🔍 包含 v11 所有搜尋功能 (多選單、快速搜尋、反光特效)
 # ===========================================================================
-
-class MachineLock:
-    def __init__(self, password="AutoBot2026"):
-        self.password = password
-        self.license_file = ".license"
-
-    def get_machine_id(self):
-        # 使用 MAC 位址作為機器特徵
-        mac = uuid.getnode()
-        # 加上簡單的鹽值並雜湊，避免直接暴露 MAC
-        raw_id = f"AUTOBOT_SALT_{mac}"
-        return hashlib.sha256(raw_id.encode()).hexdigest()
-
-    def validate(self):
-        machine_id = self.get_machine_id()
-        
-        # 1. 檢查是否存在授權檔
-        if os.path.exists(self.license_file):
-            try:
-                with open(self.license_file, 'r') as f:
-                    stored_id = f.read().strip()
-                if stored_id == machine_id:
-                    print("🔓 授權驗證成功")
-                    return True
-                else:
-                    print("⚠️ 偵測到環境變更，需重新驗證")
-            except:
-                pass
-        
-        # 2. 驗證失敗或無授權，要求密碼
-        print("\n" + "="*50)
-        print("🔒 系統鎖定保護")
-        print("   這是您第一次在此電腦執行，或授權已過期。")
-        print("   請輸入密碼以啟用此電腦的永久使用權。")
-        print("="*50)
-        
-        while True:
-            try:
-                pwd = input("🔑 請輸入啟動密碼: ").strip()
-                if pwd == self.password:
-                    print("\n✅ 驗證成功！已綁定此電腦。")
-                    try:
-                        # 寫入授權檔
-                        with open(self.license_file, 'w') as f:
-                            f.write(machine_id)
-                        
-                        # 在 Windows 上嘗試設為隱藏檔案
-                        if os.name == 'nt':
-                            try:
-                                subprocess.run(['attrib', '+h', self.license_file], 
-                                             capture_output=True, creationflags=0x08000000) # CREATE_NO_WINDOW
-                            except:
-                                pass
-                    except Exception as e:
-                        print(f"⚠️ 無法儲存授權檔 (但不影響本次使用): {e}")
-                    return True
-                else:
-                    print("❌ 密碼錯誤，請重試。\n")
-            except KeyboardInterrupt:
-                print("\n\n👋 取消驗證，程式結束。")
-                sys.exit(0)
 
 def ensure_browser_installed():
     print("🔧 檢查系統環境...")
@@ -556,14 +488,9 @@ UNIVERSAL_JS = """
 
 def main():
     print("="*60)
-    print("🚀 Auto-E-Learning Bot v12 (Secure Edition)")
+    print("🚀 Auto-E-Learning Bot v12 (Standard Edition)")
     print("="*60)
     
-    # 1. 驗證授權
-    locker = MachineLock(password="AutoBot2026")
-    if not locker.validate():
-        return
-
     # 2. 檢查環境 (自動安裝瀏覽器)
     ensure_browser_installed()
     
@@ -595,7 +522,6 @@ def main():
             pass
             
         print("\n✅ 程式已啟動 (v12)")
-        print("   - 安全模式已啟用 (機器綁定)")
         print("   - 自動環境維護已啟用")
 
         try:

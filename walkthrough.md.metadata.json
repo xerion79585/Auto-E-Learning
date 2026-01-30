@@ -1,0 +1,5 @@
+{
+  "artifactType": "ARTIFACT_TYPE_WALKTHROUGH",
+  "summary": "Project Walkthrough:\n1.  **Question Bank Manager**: CLI tool to scrape Pixnet and build `questions.json`.\n2.  **Auto Bot Scripts**:\n    -   `auto_elearning.user.js` (v12): Pixnet fallback version.\n    -   `auto_elearning_github.user.js` (v13): GitHub raw database version (Recommended).\n3.  **Multi-Bot**: Python script to auto-login and distribute tasks.\n4.  **GitHub Repo**: `https://github.com/xerion79585/Auto-E-Learning` contains all data.",
+  "updatedAt": "2026-01-29T09:57:37.045101Z"
+}
