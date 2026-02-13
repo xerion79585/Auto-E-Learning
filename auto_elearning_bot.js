@@ -569,9 +569,8 @@
                 const section = document.createElement('div');
                 section.className = 'section';
                 section.innerHTML = `
-                    <h2 style="color:#28a745;">Auto-Elearning-Tools</h2>
                     <ul>
-                        <li><a id="bot-btn-hang" href="#" style="color:#28a745;font-weight:bold;text-decoration:none;">開始掛網</a></li>
+                        <li><a id="bot-btn-hang" href="#" style="color:#28a745;font-weight:bold;text-decoration:none;">點擊進入掛網</a></li>
                     </ul>
                 `;
                 sidebar.appendChild(section);
