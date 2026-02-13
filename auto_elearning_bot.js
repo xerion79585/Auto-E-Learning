@@ -578,18 +578,26 @@
                 document.getElementById('bot-btn-hang').onclick = (e) => {
                     e.preventDefault();
 
-                    // Try to get LIVE ticket from current frame
+                    // 1. Try to get LIVE ticket from current frame
                     let t = null, c = null;
                     try {
                         const f = window.parent.frames['s_main'] || window.frames['s_main'];
                         if (f && f.pTicket && f.cid) {
                             t = f.pTicket;
                             c = f.cid;
-                            // Update cache immediately
-                            GM_setValue('_hang_ticket', t);
-                            GM_setValue('_hang_cid', c);
+                            // Update cache immediately if different
+                            if (t !== GM_getValue('_hang_ticket')) {
+                                GM_setValue('_hang_ticket', t);
+                                GM_setValue('_hang_cid', c);
+                            }
                         }
                     } catch (ex) { }
+
+                    // 2. Fallback to cache if live check failed
+                    if (!t || !c) {
+                        t = GM_getValue('_hang_ticket', '');
+                        c = GM_getValue('_hang_cid', '');
+                    }
 
                     if (t && c) {
                         window.top.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
