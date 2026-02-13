@@ -598,16 +598,14 @@
                     }
                 };
             }
-        };
-    }
 
-    // 2. hanging overlay with real-time clock
-    if (url.includes('mooc/index.php') && url.includes('ticket=')) {
-        if (!document.getElementById('bot-hang-overlay')) {
-            const params = new URLSearchParams(window.location.search);
-            const ticket = params.get('ticket'), cid = params.get('cid');
-            if (ticket && cid) {
-                createOverlay('bot-hang-overlay', `
+            // 2. hanging overlay with real-time clock
+            if (url.includes('mooc/index.php') && url.includes('ticket=')) {
+                if (!document.getElementById('bot-hang-overlay')) {
+                    const params = new URLSearchParams(window.location.search);
+                    const ticket = params.get('ticket'), cid = params.get('cid');
+                    if (ticket && cid) {
+                        createOverlay('bot-hang-overlay', `
                             <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#fff;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                                 <h1 style="color:#28a745;">🟢 掛網中</h1>
                                 <p>每10秒自動打卡</p>
@@ -616,120 +614,120 @@
                             </div>
                         `);
 
-                // Real-time clock (not affected by tab switching)
-                const startTime = Date.now();
-                setInterval(() => {
-                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                    const h = Math.floor(elapsed / 3600);
-                    const m = Math.floor((elapsed % 3600) / 60);
-                    const s = elapsed % 60;
-                    const d = document.getElementById('bot-timer-display');
-                    if (d) d.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                }, 1000);
+                        // Real-time clock (not affected by tab switching)
+                        const startTime = Date.now();
+                        setInterval(() => {
+                            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                            const h = Math.floor(elapsed / 3600);
+                            const m = Math.floor((elapsed % 3600) / 60);
+                            const s = elapsed % 60;
+                            const d = document.getElementById('bot-timer-display');
+                            if (d) d.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        }, 1000);
 
-                // Punch every 10 seconds
-                setInterval(() => {
-                    fetch("/mooc/controllers/course_record.php?actype=end", {
-                        method: "POST", headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
-                        body: `action=setReading&type=end&ticket=${ticket}&enCid=${cid}`
-                    });
-                }, 10000);
+                        // Punch every 10 seconds
+                        setInterval(() => {
+                            fetch("/mooc/controllers/course_record.php?actype=end", {
+                                method: "POST", headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
+                                body: `action=setReading&type=end&ticket=${ticket}&enCid=${cid}`
+                            });
+                        }, 10000);
 
-                // Stop button - use replace to prevent back-button returning to expired ticket
-                document.getElementById('bot-btn-stop-hang').onclick = () => {
-                    window.location.replace('/mooc/user/learn_dashboard.php?tab=1');
-                };
-            }
-        }
-    }
-
-    // 3. exam page
-    if (url.includes('exam_start.php') && !url.includes('questionnaire')) {
-        if (!document.getElementById('bot-exam-toolbar')) {
-            const toolbar = document.createElement('div');
-            toolbar.id = 'bot-exam-toolbar';
-            Object.assign(toolbar.style, {
-                position: 'fixed', top: '50%', left: '0', transform: 'translateY(-50%)',
-                zIndex: '9999999', display: 'flex', flexDirection: 'column', gap: '8px',
-                padding: '10px', background: 'rgba(0,0,0,0.85)', borderRadius: '0 12px 12px 0',
-                boxShadow: '2px 0 15px rgba(0,0,0,0.3)'
-            });
-
-            const btnSolve = document.createElement('button');
-            btnSolve.id = 'bot-btn-solve';
-            btnSolve.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>';
-            Object.assign(btnSolve.style, {
-                width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
-                background: 'linear-gradient(135deg, #6610f2 0%, #6f42c1 100%)',
-                color: '#fff', fontWeight: 'bold', fontSize: '18px',
-                transition: 'transform 0.2s', lineHeight: '1.2'
-            });
-            btnSolve.onmouseover = () => btnSolve.style.transform = 'scale(1.08)';
-            btnSolve.onmouseout = () => btnSolve.style.transform = 'scale(1)';
-            btnSolve.onclick = oneClickSolve;
-
-            const btnSearch = document.createElement('button');
-            btnSearch.id = 'bot-btn-manual';
-            btnSearch.innerHTML = '🔍<br><span style="font-size:11px;">手動</span><br><span style="font-size:11px;">搜尋</span>';
-            Object.assign(btnSearch.style, {
-                width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
-                background: 'linear-gradient(135deg, #24292e 0%, #444d56 100%)',
-                color: '#fff', fontWeight: 'bold', fontSize: '18px',
-                transition: 'transform 0.2s', lineHeight: '1.2'
-            });
-            btnSearch.onmouseover = () => btnSearch.style.transform = 'scale(1.08)';
-            btnSearch.onmouseout = () => btnSearch.style.transform = 'scale(1)';
-            btnSearch.onclick = () => {
-                const panel = document.getElementById('bot-exam-panel');
-                if (panel) {
-                    const isVisible = panel.style.display !== 'none';
-                    panel.style.display = isVisible ? 'none' : 'block';
-                    document.body.style.marginLeft = isVisible ? '0' : '510px';
-                    btnSearch.style.background = isVisible
-                        ? 'linear-gradient(135deg, #24292e 0%, #444d56 100%)'
-                        : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-                } else {
-                    setupSearchPanel();
-                    btnSearch.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+                        // Stop button - use replace to prevent back-button returning to expired ticket
+                        document.getElementById('bot-btn-stop-hang').onclick = () => {
+                            window.location.replace('/mooc/user/learn_dashboard.php?tab=1');
+                        };
+                    }
                 }
-            };
-
-            toolbar.appendChild(btnSolve);
-            toolbar.appendChild(btnSearch);
-            document.body.appendChild(toolbar);
-        }
-    }
-
-    // 4. questionnaire
-    if (url.includes('questionnaire')) {
-        if (!window.__bot_q_filled && document.querySelector('input[type="radio"]')) {
-            window.__bot_q_filled = true;
-
-            const radios = document.querySelectorAll('input[type="radio"]');
-            const alreadyAnswered = Array.from(radios).some(r => r.checked);
-            if (alreadyAnswered) return;
-
-            window.alert = () => { }; window.confirm = () => true;
-            const groups = {};
-            radios.forEach(r => { if (!groups[r.name]) groups[r.name] = []; groups[r.name].push(r); });
-            for (let k in groups) {
-                const g = groups[k];
-                let t = g.find(r => r.value === 'C') || g[2] || g[g.length - 1];
-                if (t && !t.checked) t.click();
             }
-            const checks = document.querySelectorAll('input[type="checkbox"]');
-            const cgroups = {};
-            checks.forEach(c => { if (!cgroups[c.name]) cgroups[c.name] = []; cgroups[c.name].push(c); });
-            for (let k in cgroups) {
-                cgroups[k].slice(0, 3).forEach(c => { if (!c.checked) c.click(); });
+
+            // 3. exam page
+            if (url.includes('exam_start.php') && !url.includes('questionnaire')) {
+                if (!document.getElementById('bot-exam-toolbar')) {
+                    const toolbar = document.createElement('div');
+                    toolbar.id = 'bot-exam-toolbar';
+                    Object.assign(toolbar.style, {
+                        position: 'fixed', top: '50%', left: '0', transform: 'translateY(-50%)',
+                        zIndex: '9999999', display: 'flex', flexDirection: 'column', gap: '8px',
+                        padding: '10px', background: 'rgba(0,0,0,0.85)', borderRadius: '0 12px 12px 0',
+                        boxShadow: '2px 0 15px rgba(0,0,0,0.3)'
+                    });
+
+                    const btnSolve = document.createElement('button');
+                    btnSolve.id = 'bot-btn-solve';
+                    btnSolve.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>';
+                    Object.assign(btnSolve.style, {
+                        width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #6610f2 0%, #6f42c1 100%)',
+                        color: '#fff', fontWeight: 'bold', fontSize: '18px',
+                        transition: 'transform 0.2s', lineHeight: '1.2'
+                    });
+                    btnSolve.onmouseover = () => btnSolve.style.transform = 'scale(1.08)';
+                    btnSolve.onmouseout = () => btnSolve.style.transform = 'scale(1)';
+                    btnSolve.onclick = oneClickSolve;
+
+                    const btnSearch = document.createElement('button');
+                    btnSearch.id = 'bot-btn-manual';
+                    btnSearch.innerHTML = '🔍<br><span style="font-size:11px;">手動</span><br><span style="font-size:11px;">搜尋</span>';
+                    Object.assign(btnSearch.style, {
+                        width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #24292e 0%, #444d56 100%)',
+                        color: '#fff', fontWeight: 'bold', fontSize: '18px',
+                        transition: 'transform 0.2s', lineHeight: '1.2'
+                    });
+                    btnSearch.onmouseover = () => btnSearch.style.transform = 'scale(1.08)';
+                    btnSearch.onmouseout = () => btnSearch.style.transform = 'scale(1)';
+                    btnSearch.onclick = () => {
+                        const panel = document.getElementById('bot-exam-panel');
+                        if (panel) {
+                            const isVisible = panel.style.display !== 'none';
+                            panel.style.display = isVisible ? 'none' : 'block';
+                            document.body.style.marginLeft = isVisible ? '0' : '510px';
+                            btnSearch.style.background = isVisible
+                                ? 'linear-gradient(135deg, #24292e 0%, #444d56 100%)'
+                                : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+                        } else {
+                            setupSearchPanel();
+                            btnSearch.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+                        }
+                    };
+
+                    toolbar.appendChild(btnSolve);
+                    toolbar.appendChild(btnSearch);
+                    document.body.appendChild(toolbar);
+                }
             }
-            setTimeout(() => {
-                const btn = document.querySelector('input[type="submit"], button[type="submit"], input[value="送出"]');
-                if (btn) btn.click();
-            }, 500);
-        }
-    }
-}, 1000);
+
+            // 4. questionnaire
+            if (url.includes('questionnaire')) {
+                if (!window.__bot_q_filled && document.querySelector('input[type="radio"]')) {
+                    window.__bot_q_filled = true;
+
+                    const radios = document.querySelectorAll('input[type="radio"]');
+                    const alreadyAnswered = Array.from(radios).some(r => r.checked);
+                    if (alreadyAnswered) return;
+
+                    window.alert = () => { }; window.confirm = () => true;
+                    const groups = {};
+                    radios.forEach(r => { if (!groups[r.name]) groups[r.name] = []; groups[r.name].push(r); });
+                    for (let k in groups) {
+                        const g = groups[k];
+                        let t = g.find(r => r.value === 'C') || g[2] || g[g.length - 1];
+                        if (t && !t.checked) t.click();
+                    }
+                    const checks = document.querySelectorAll('input[type="checkbox"]');
+                    const cgroups = {};
+                    checks.forEach(c => { if (!cgroups[c.name]) cgroups[c.name] = []; cgroups[c.name].push(c); });
+                    for (let k in cgroups) {
+                        cgroups[k].slice(0, 3).forEach(c => { if (!c.checked) c.click(); });
+                    }
+                    setTimeout(() => {
+                        const btn = document.querySelector('input[type="submit"], button[type="submit"], input[value="送出"]');
+                        if (btn) btn.click();
+                    }, 500);
+                }
+            }
+        }, 1000);
     }
 
-}) ();
+})();
