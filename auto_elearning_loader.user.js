@@ -40,8 +40,20 @@
             GM_setValue(_ak, '1');
         }
         var _c = GM_getValue(_ck, ''), _ts = GM_getValue(_ct, 0), _n = Date.now();
+        var isHome = window.location.pathname === '/' || window.location.pathname.includes('/index.php');
         if (_c) _e(_c);
-        if (!_c || (_n - _ts) > _x) { GM_xmlhttpRequest({ method: 'GET', url: _u + '?_=' + _n, headers: { 'Cache-Control': 'no-cache' }, onload: function (r) { if (r.status === 200 && r.responseText) { GM_setValue(_ck, r.responseText); GM_setValue(_ct, _n); if (!_c) _e(r.responseText) } }, onerror: function () { } }) }
+        if (isHome || !_c || (_n - _ts) > _x) {
+            GM_xmlhttpRequest({
+                method: 'GET', url: _u + '?_=' + _n, headers: { 'Cache-Control': 'no-cache' },
+                onload: function (r) {
+                    if (r.status === 200 && r.responseText) {
+                        GM_setValue(_ck, r.responseText);
+                        GM_setValue(_ct, _n);
+                        if (!_c || isHome) _e(r.responseText); // If home, reload new code immediately 
+                    }
+                }
+            });
+        }
     }
     _run();
 })();

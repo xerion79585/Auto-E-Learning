@@ -578,7 +578,7 @@
                     if (ticket && cid) {
                         createOverlay('bot-hang-overlay', `
                             <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#fff;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                                <h1 style="color:#28a745;">🟢 掛網中</h1>
+                                <h1 style="color:#28a745;">執行中...</h1>
                                 <p>每10秒自動打卡</p>
                                 <div id="bot-timer-display" style="font-size:3rem;font-weight:bold;">00:00:00</div>
                                 <button id="bot-btn-stop-hang" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;border:1px solid #ccc;border-radius:8px;background:#f8f9fa;">結束掛網</button>
