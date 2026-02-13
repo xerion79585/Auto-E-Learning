@@ -549,44 +549,26 @@
             if (!window.__BOT_AUTH) return;
             const url = window.location.href;
 
-            // 1a. pathtree - save ticket/cid to GM storage for sidebar button
+            // 1. path tree - left toolbar with hang button (OLD STYLE)
             if (url.includes('pathtree.php')) {
-                try {
-                    let t = (typeof pTicket !== 'undefined') ? pTicket : null;
-                    let c = (typeof cid !== 'undefined') ? cid : null;
-                    if (!t && window.parent) t = window.parent.pTicket;
-                    if (!c && window.parent) c = window.parent.cid;
-                    if (t && c) {
-                        GM_setValue('_hang_ticket', t);
-                        GM_setValue('_hang_cid', c);
-                    }
-                } catch (e) { }
-            }
-
-            // 1b. sidebar hang button (inside #moocSidebar)
-            const sidebar = document.getElementById('moocSidebar');
-            if (sidebar && !document.getElementById('bot-btn-hang')) {
-                const section = document.createElement('div');
-                section.className = 'section';
-                section.innerHTML = `
-                    <ul>
-                        <li><a id="bot-btn-hang" href="#" style="color:#28a745;font-weight:bold;text-decoration:none;">▶ 開始掛網</a></li>
-                    </ul>
-                `;
-                sidebar.appendChild(section);
-
-                document.getElementById('bot-btn-hang').onclick = (e) => {
-                    e.preventDefault();
-
-                    const t = GM_getValue('_hang_ticket', '');
-                    const c = GM_getValue('_hang_cid', '');
-
-                    if (t && c) {
-                        window.top.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
-                    } else {
-                        alert('請先點選「開始上課」載入課程內容後，再點擊開始掛網');
-                    }
-                };
+                if (!document.getElementById('bot-btn-hang')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'bot-btn-hang';
+                    btn.innerHTML = '▶ 開始掛網';
+                    Object.assign(btn.style, {
+                        position: 'fixed', top: '15px', right: '15px', zIndex: '999999', padding: '8px',
+                        background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                        color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)', fontWeight: 'bold', fontSize: '13px'
+                    });
+                    btn.onclick = () => {
+                        let t = (typeof pTicket !== 'undefined' ? pTicket : null) || (window.parent && window.parent.pTicket);
+                        let c = (typeof cid !== 'undefined' ? cid : null) || (window.parent && window.parent.cid);
+                        if (t && c) window.parent.parent.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
+                        else alert('找不到 ticket 或 cid');
+                    };
+                    document.body.appendChild(btn);
+                }
             }
 
             // 2. hanging overlay with real-time clock
