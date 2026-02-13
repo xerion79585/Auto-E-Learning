@@ -549,29 +549,43 @@
             if (!window.__BOT_AUTH) return;
             const url = window.location.href;
 
-            // 1. path tree
+            // 1. path tree - left toolbar with hang button
             if (url.includes('pathtree.php')) {
-                if (!document.getElementById('bot-btn-hang')) {
-                    const btn = document.createElement('button');
-                    btn.id = 'bot-btn-hang';
-                    btn.innerHTML = '▶ 開始掛網';
-                    Object.assign(btn.style, {
-                        position: 'fixed', top: '15px', right: '15px', zIndex: '999999', padding: '10px 20px',
-                        background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
-                        color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer',
-                        boxShadow: '0 4px 15px rgba(56,239,125,0.4)', fontWeight: 'bold', fontSize: '14px'
+                if (!document.getElementById('bot-pathtree-toolbar')) {
+                    const toolbar = document.createElement('div');
+                    toolbar.id = 'bot-pathtree-toolbar';
+                    Object.assign(toolbar.style, {
+                        position: 'fixed', top: '50%', left: '0', transform: 'translateY(-50%)',
+                        zIndex: '9999999', display: 'flex', flexDirection: 'column', gap: '8px',
+                        padding: '10px', background: 'rgba(0,0,0,0.85)', borderRadius: '0 12px 12px 0',
+                        boxShadow: '2px 0 15px rgba(0,0,0,0.3)'
                     });
-                    btn.onclick = () => {
+
+                    const btnHang = document.createElement('button');
+                    btnHang.id = 'bot-btn-hang';
+                    btnHang.innerHTML = '▶<br><span style="font-size:11px;">開始</span><br><span style="font-size:11px;">掛網</span>';
+                    Object.assign(btnHang.style, {
+                        width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+                        color: '#fff', fontWeight: 'bold', fontSize: '18px',
+                        transition: 'transform 0.2s', lineHeight: '1.2',
+                        boxShadow: '0 4px 15px rgba(56,239,125,0.4)'
+                    });
+                    btnHang.onmouseover = () => btnHang.style.transform = 'scale(1.08)';
+                    btnHang.onmouseout = () => btnHang.style.transform = 'scale(1)';
+                    btnHang.onclick = () => {
                         let t = (typeof pTicket !== 'undefined' ? pTicket : null) || (window.parent && window.parent.pTicket);
                         let c = (typeof cid !== 'undefined' ? cid : null) || (window.parent && window.parent.cid);
                         if (t && c) window.parent.parent.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
                         else alert('找不到 ticket 或 cid');
                     };
-                    document.body.appendChild(btn);
+
+                    toolbar.appendChild(btnHang);
+                    document.body.appendChild(toolbar);
                 }
             }
 
-            // 2. hanging overlay
+            // 2. hanging overlay with real-time clock
             if (url.includes('mooc/index.php') && url.includes('ticket=')) {
                 if (!document.getElementById('bot-hang-overlay')) {
                     const params = new URLSearchParams(window.location.search);
@@ -579,23 +593,36 @@
                     if (ticket && cid) {
                         createOverlay('bot-hang-overlay', `
                             <div style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#fff;z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                                <h1 style="color:#28a745;">🟢 掛網中 (v14)</h1>
+                                <h1 style="color:#28a745;">🟢 掛網中</h1>
                                 <p>每10秒自動打卡</p>
-                                <div id="bot-timer-display" style="font-size:3rem;font-weight:bold;">00:00</div>
-                                <button onclick="window.location.href='/mooc/user/learn_dashboard.php?tab=1'" style="margin-top:20px;padding:10px 20px;">結束掛網</button>
+                                <div id="bot-timer-display" style="font-size:3rem;font-weight:bold;">00:00:00</div>
+                                <button id="bot-btn-stop-hang" style="margin-top:20px;padding:10px 20px;font-size:14px;cursor:pointer;border:1px solid #ccc;border-radius:8px;background:#f8f9fa;">結束掛網</button>
                             </div>
                         `);
-                        let sec = 0;
+
+                        // Real-time clock (not affected by tab switching)
+                        const startTime = Date.now();
+                        setInterval(() => {
+                            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                            const h = Math.floor(elapsed / 3600);
+                            const m = Math.floor((elapsed % 3600) / 60);
+                            const s = elapsed % 60;
+                            const d = document.getElementById('bot-timer-display');
+                            if (d) d.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                        }, 1000);
+
+                        // Punch every 10 seconds
                         setInterval(() => {
                             fetch("/mooc/controllers/course_record.php?actype=end", {
                                 method: "POST", headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
                                 body: `action=setReading&type=end&ticket=${ticket}&enCid=${cid}`
-                            }).then(() => {
-                                sec += 10;
-                                const d = document.getElementById('bot-timer-display');
-                                if (d) d.innerText = `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
                             });
                         }, 10000);
+
+                        // Stop button - use replace to prevent back-button returning to expired ticket
+                        document.getElementById('bot-btn-stop-hang').onclick = () => {
+                            window.location.replace('/mooc/user/learn_dashboard.php?tab=1');
+                        };
                     }
                 }
             }
