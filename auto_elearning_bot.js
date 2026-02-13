@@ -570,41 +570,65 @@
                 section.className = 'section';
                 section.innerHTML = `
                     <ul>
-                        <li><a id="bot-btn-hang" href="#" style="color:#28a745;font-weight:bold;text-decoration:none;">點擊進入掛網</a></li>
+                        <li><a id="bot-btn-hang" href="#" style="color:#aaa;font-weight:bold;text-decoration:none;cursor:not-allowed;">⏳ 載入課程中...</a></li>
                     </ul>
                 `;
                 sidebar.appendChild(section);
 
-                document.getElementById('bot-btn-hang').onclick = (e) => {
-                    e.preventDefault();
+                const btn = document.getElementById('bot-btn-hang');
+                let foundTicket = false;
+                let ticketCheckCount = 0;
 
-                    // 1. Try to get LIVE ticket from current frame
+                // Poll for ticket
+                const ticketTimer = setInterval(() => {
                     let t = null, c = null;
                     try {
                         const f = window.parent.frames['s_main'] || window.frames['s_main'];
                         if (f && f.pTicket && f.cid) {
                             t = f.pTicket;
                             c = f.cid;
-                            // Update cache immediately if different
-                            if (t !== GM_getValue('_hang_ticket')) {
-                                GM_setValue('_hang_ticket', t);
-                                GM_setValue('_hang_cid', c);
-                            }
                         }
-                    } catch (ex) { }
-
-                    // 2. Fallback to cache if live check failed
-                    if (!t || !c) {
-                        t = GM_getValue('_hang_ticket', '');
-                        c = GM_getValue('_hang_cid', '');
-                    }
+                    } catch (e) { }
 
                     if (t && c) {
-                        window.top.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
+                        // Ticket found! Enable button
+                        clearInterval(ticketTimer);
+                        foundTicket = true;
+                        GM_setValue('_hang_ticket', t);
+                        GM_setValue('_hang_cid', c);
+
+                        btn.innerHTML = '▶ 開始掛網';
+                        btn.style.color = '#28a745';
+                        btn.style.cursor = 'pointer';
+
+                        btn.onclick = (e) => {
+                            e.preventDefault();
+                            window.top.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
+                        };
                     } else {
-                        alert('⏳ 課程資訊載入中...\n\n請等待右側課程內容完全出現後，再點擊「開始掛網」。\n(過早點擊會導致時數無效)');
+                        ticketCheckCount++;
+                        // If no ticket after 10 seconds, enable fallback
+                        if (ticketCheckCount > 10) {
+                            clearInterval(ticketTimer);
+                            const lastT = GM_getValue('_hang_ticket', '');
+                            const lastC = GM_getValue('_hang_cid', '');
+
+                            if (lastT && lastC) {
+                                btn.innerHTML = '▶ 開始掛網 (快取)';
+                                btn.style.color = '#e0a800'; // warning color
+                                btn.style.cursor = 'pointer';
+                                btn.onclick = (e) => {
+                                    e.preventDefault();
+                                    if (confirm('無法偵測新課程，是否使用上次的課程資訊繼續掛網？\n(若課程不同，請勿使用)')) {
+                                        window.top.location.href = `/mooc/index.php?ticket=${lastT}&cid=${lastC}`;
+                                    }
+                                };
+                            } else {
+                                btn.innerHTML = '❌ 無法取得課程';
+                            }
+                        }
                     }
-                };
+                }, 1000);
             }
 
             // 2. hanging overlay with real-time clock
