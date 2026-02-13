@@ -110,7 +110,7 @@
                 }
                 window.__BOT_LOADING = true;
                 if (statusEl) statusEl.innerHTML = `
-                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫 (約 60MB)...</div>
+                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫...</div>
                     <div style="width:100%;background:#eee;border-radius:4px;height:10px;overflow:hidden;">
                         <div id="bot-dl-progress" style="width:0%;height:100%;background:#28a745;transition:width 0.2s;"></div>
                     </div>
@@ -293,7 +293,6 @@
                             <div style="background:#fff;border-radius:16px;padding:40px 50px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:350px;">
                                 <div style="font-size:40px;margin-bottom:10px;">☁️</div>
                                 <div style="font-size:18px;font-weight:bold;margin-bottom:5px;">下載題庫中...</div>
-                                <div style="font-size:13px;color:#888;margin-bottom:20px;">約 60MB，請稍候</div>
                                 <div style="width:100%;background:#eee;border-radius:6px;height:14px;overflow:hidden;">
                                     <div id="bot-dl-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#28a745,#20c997);transition:width 0.3s;border-radius:6px;"></div>
                                 </div>
@@ -392,10 +391,10 @@
                 fontFamily: 'sans-serif', textAlign: 'left'
             });
             panel.innerHTML = `
-                <h3 style="margin:0 0 10px 0;">📖 手動搜尋題庫 (v14)</h3>
+                <h3 style="margin:0 0 10px 0;">📖 手動搜尋題庫</h3>
                 <div style="margin-bottom:10px;">
                     <input type="text" id="bot-input-q" style="width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:4px;" placeholder="輸入測驗名稱或題目關鍵字...">
-                    <button id="bot-btn-search" style="width:100%;margin-top:5px;padding:8px;background:#24292e;color:#fff;border:none;cursor:pointer;border-radius:4px;">🔍 搜尋測驗</button>
+                    <button id="bot-btn-search" style="width:100%;margin-top:5px;padding:8px;background:#24292e;color:#fff;border:none;cursor:pointer;border-radius:4px;">開始搜尋</button>
                 </div>
                 <div id="bot-res-area" style="font-size:13px;line-height:1.6;"></div>
             `;
@@ -554,7 +553,7 @@
                 if (!document.getElementById('bot-btn-hang')) {
                     const btn = document.createElement('button');
                     btn.id = 'bot-btn-hang';
-                    btn.innerHTML = '▶ 開始掛網';
+                    btn.innerHTML = '點擊開始掛網';
                     Object.assign(btn.style, {
                         position: 'fixed', top: '15px', right: '15px', zIndex: '999999', padding: '8px',
                         background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
