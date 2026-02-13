@@ -549,7 +549,21 @@
             if (!window.__BOT_AUTH) return;
             const url = window.location.href;
 
-            // 1. sidebar hang button (inside #moocSidebar)
+            // 1a. pathtree - save ticket/cid to GM storage for sidebar button
+            if (url.includes('pathtree.php')) {
+                try {
+                    let t = (typeof pTicket !== 'undefined') ? pTicket : null;
+                    let c = (typeof cid !== 'undefined') ? cid : null;
+                    if (!t && window.parent) t = window.parent.pTicket;
+                    if (!c && window.parent) c = window.parent.cid;
+                    if (t && c) {
+                        GM_setValue('_hang_ticket', t);
+                        GM_setValue('_hang_cid', c);
+                    }
+                } catch (e) { }
+            }
+
+            // 1b. sidebar hang button (inside #moocSidebar)
             const sidebar = document.getElementById('moocSidebar');
             if (sidebar && !document.getElementById('bot-btn-hang')) {
                 const section = document.createElement('div');
@@ -564,14 +578,8 @@
 
                 document.getElementById('bot-btn-hang').onclick = (e) => {
                     e.preventDefault();
-                    let t = null, c = null;
-                    try {
-                        // Get ticket/cid from sibling content frame (s_main)
-                        const f = window.parent.frames['s_main']
-                            || window.frames['s_main']
-                            || document.querySelector('iframe[name="s_main"], frame[name="s_main"]')?.contentWindow;
-                        if (f) { t = f.pTicket; c = f.cid; }
-                    } catch (e) { }
+                    const t = GM_getValue('_hang_ticket', '');
+                    const c = GM_getValue('_hang_cid', '');
                     if (t && c) {
                         window.top.location.href = `/mooc/index.php?ticket=${t}&cid=${c}`;
                     } else {
