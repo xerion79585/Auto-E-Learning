@@ -553,7 +553,7 @@
                 if (!document.getElementById('bot-btn-hang')) {
                     const btn = document.createElement('button');
                     btn.id = 'bot-btn-hang';
-                    btn.innerHTML = '點擊開始掛網';
+                    btn.innerHTML = '開始掛網';
                     Object.assign(btn.style, {
                         position: 'fixed', top: '15px', right: '15px', zIndex: '999999', padding: '8px',
                         background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
