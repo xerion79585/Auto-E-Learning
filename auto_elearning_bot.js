@@ -110,7 +110,7 @@
                 }
                 window.__BOT_LOADING = true;
                 if (statusEl) statusEl.innerHTML = `
-                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫 (約 55MB)...</div>
+                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫 (約 60MB)...</div>
                     <div style="width:100%;background:#eee;border-radius:4px;height:10px;overflow:hidden;">
                         <div id="bot-dl-progress" style="width:0%;height:100%;background:#28a745;transition:width 0.2s;"></div>
                     </div>
@@ -278,7 +278,7 @@
 
             try {
                 if (!window.__BOT_DB) {
-                    log('☁️ 下載題庫...');
+                    log('☁️ 下載題庫中...');
                     // Show full-screen progress overlay
                     let dlOverlay = document.getElementById('bot-dl-overlay');
                     if (!dlOverlay) {
@@ -293,7 +293,7 @@
                             <div style="background:#fff;border-radius:16px;padding:40px 50px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:350px;">
                                 <div style="font-size:40px;margin-bottom:10px;">☁️</div>
                                 <div style="font-size:18px;font-weight:bold;margin-bottom:5px;">下載題庫中...</div>
-                                <div style="font-size:13px;color:#888;margin-bottom:20px;">約 55MB，請稍候</div>
+                                <div style="font-size:13px;color:#888;margin-bottom:20px;">約 60MB，請稍候</div>
                                 <div style="width:100%;background:#eee;border-radius:6px;height:14px;overflow:hidden;">
                                     <div id="bot-dl-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#28a745,#20c997);transition:width 0.3s;border-radius:6px;"></div>
                                 </div>
@@ -569,7 +569,7 @@
                 const section = document.createElement('div');
                 section.className = 'section';
                 section.innerHTML = `
-                    <h2 style="color:#28a745;">Auto-ElearningTools</h2>
+                    <h2 style="color:#28a745;">Auto-Elearning-Tools</h2>
                     <ul>
                         <li><a id="bot-btn-hang" href="#" style="color:#28a745;font-weight:bold;text-decoration:none;">開始掛網</a></li>
                     </ul>
