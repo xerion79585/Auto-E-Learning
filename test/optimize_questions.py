@@ -21,11 +21,17 @@ def optimize():
         answer = a_raw.strip() if a_raw else ''
         
         # If answer is empty, try to find it in options
-        if not answer and 'options' in item:
+        if 'options' in item:
+            correct_answers = []
             for opt in item['options']:
                 if opt.get('correct'):
-                    answer = opt.get('text', '').strip()
-                    break
+                     correct_answers.append(opt.get('text', '').strip())
+            
+            if correct_answers:
+                answer = ' /// '.join(correct_answers)
+            elif not answer:
+                # Fallback if no correct option found and answer field is empty
+                pass
         
         # Determine strict matching mode (for O/X questions)
         # If answer is very short (O/X), we might need strict match, but for now just text is fine.

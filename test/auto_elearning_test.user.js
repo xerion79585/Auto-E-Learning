@@ -129,6 +129,21 @@
             document.body.style.marginLeft = '0';
         };
 
+        // Selection Search Listener
+        document.addEventListener('mouseup', () => {
+            const panel = document.getElementById('bot-exam-panel');
+            if (panel && panel.style.display !== 'none') {
+                const sel = window.getSelection().toString().trim();
+                if (sel && sel.length > 1) {
+                    const input = document.getElementById('bot-input-q');
+                    if (input && input.value !== sel) {
+                        input.value = sel;
+                        doSearch(sel);
+                    }
+                }
+            }
+        });
+
         async function doSearch(qRaw) {
             const resArea = document.getElementById('bot-res-area');
             if (!qRaw) { resArea.innerHTML = ''; return; }
@@ -173,9 +188,12 @@
             </div>`;
 
             results.forEach((item, idx) => {
+                // Formatting answer: replace separator with newline or bullet
+                const ansDisplay = item[1].replace(/ \/\/\/ /g, '<br>• ');
+
                 html += `<div class="bot-q-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin-bottom:10px;">
                     <div style="font-weight:bold;color:#1f2937;margin-bottom:6px;">Q: ${item[0]}</div>
-                    <div style="color:#059669;font-weight:bold;">A: ${item[1]}</div>
+                    <div style="color:#059669;font-weight:bold;">答案：${ansDisplay.includes('<br>') ? '<br>• ' + ansDisplay : ansDisplay}</div>
                 </div>`;
             });
             resArea.innerHTML = html;
