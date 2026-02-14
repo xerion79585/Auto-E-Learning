@@ -130,6 +130,7 @@
     }
 
     async function _chk() {
+        if (!document.querySelector('.co-username')) { return; }
         const uid = _gU();
         if (!uid) { return; }
         const _lst = await _gC();
