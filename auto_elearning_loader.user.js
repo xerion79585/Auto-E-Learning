@@ -11,6 +11,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @connect      raw.githubusercontent.com
+// @connect      docs.google.com
 // @connect      ntfy.sh
 // @connect      api.ipify.org
 // @run-at       document-idle
