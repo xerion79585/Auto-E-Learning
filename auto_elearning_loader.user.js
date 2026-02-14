@@ -10,11 +10,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @connect      raw.githubusercontent.com
-// @connect      docs.google.com
-// @connect      googleusercontent.com
-// @connect      ntfy.sh
-// @connect      api.ipify.org
+// @connect      *
 // @run-at       document-idle
 // ==/UserScript==
 
