@@ -10,6 +10,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @connect      raw.githubusercontent.com
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -88,8 +89,26 @@
         const btn = document.getElementById('bot-btn-solve');
         if (btn) { btn.disabled = true; btn.innerText = '⏳ ...'; }
 
-        // ... (Log UI creation skipped for brevity, same as original) ...
-        const log = console.log;
+        const logArea = document.getElementById('bot-solver-log') || (() => {
+            const d = document.createElement('div');
+            d.id = 'bot-solver-log';
+            Object.assign(d.style, {
+                position: 'fixed', bottom: '10px', right: '10px', width: '400px', maxHeight: '350px',
+                overflowY: 'auto', background: 'rgba(0,0,0,0.95)', color: '#eee', fontSize: '11px',
+                padding: '12px', borderRadius: '8px', zIndex: '999999', fontFamily: 'Consolas, monospace',
+                border: '1px solid #555', whiteSpace: 'pre-wrap'
+            });
+            document.body.appendChild(d);
+            return d;
+        })();
+
+        const log = (msg) => {
+            const p = document.createElement('div');
+            p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logArea.prepend(p);
+        };
+
+        log('🚀 [Test] 開始作答...');
 
         try {
             if (!window.__BOT_DB) {
