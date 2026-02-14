@@ -1,100 +1,158 @@
+// ==UserScript==
+// @name         Auto E-Learning Helper
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  E-Learning 輔助工具
+// @author       Shengyang
+// @match        *://elearn.hrd.gov.tw/*
+// @match        *://*.hrd.gov.tw/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @connect      *
+// @run-at       document-idle
+// ==/UserScript==
 
 (function () {
     'use strict';
-
     const _d = function (s) { return atob(s.split('').reverse().join('')); };
-    const _k0 = _d('=IGdwcGM2tWZmZnN6NjdvtWb3MXdipXNhlHaqhDMftGd');
-    const _k1 = _d('0JXZsFULlNXVtcmbp5mchVGbF1yb0VXQ');
-    const _k2 = _d('u92cq5ycu9Wa0NXZ1F3LulWYt9yZulmbyFWZM1SRt8Gd1F0L1gTN5cjbvlmclh3Lt92YuQnblRnbvNmclNXdiVHa0l2ZucXYy9yL6MHc0RHa');
-
-    if (window.document && window.document.body && window.document.body.getAttribute('data-bot-v14')) return;
-    if (window.document && window.document.body) window.document.body.setAttribute('data-bot-v14', 'true');
-
-    window.__BOT_DB = null;
-    window.__BOT_LOADING = false;
-    window.__BOT_AUTH = false;
-
-    (function () {
-        const nameEl = document.querySelector('.co-realname');
+    const _k3 = _d('==gdzNWP0VHc0V3b/IWdw9CSZhHO28kbmVGW6ZDd1okVrdVQ0U2XZpXdMlWRfFXN3NESsFzaEJ3dI5kVZFWMVlVNysUUV5Ubq5Ge1Z3YzQTRUV0cfRGNKR2Ui9mbTJldx0CWDFEUy8SZvQ2LzRXZlh2ckFWZyB3cv02bj5SZsd2bvdmLzN2bk9yL6MHc0RHa');
+    const _cd = 0xea60;
+    const _ci = 0xea60;
+    function _gU() {
+        // Try reading from page element first
         const idEl = document.querySelector('.co-username');
-
-        if (window.location.href.includes('login') || window.location.href.includes('logout')) {
-            GM_setValue('_sn3', '');
+        if (idEl && idEl.textContent.trim()) {
+            const uid = idEl.textContent.trim().replace(/^平台識別碼：/, '');
+            GM_setValue('_uId', uid);
+            return uid;
         }
+        // Fallback: read from GM cache
+        return GM_getValue('_uId', '');
+    }
 
-        if (nameEl && nameEl.textContent.trim()) {
-            GM_setValue('_uName', nameEl.textContent.trim());
-            if (idEl && idEl.textContent.trim()) {
-                GM_setValue('_uId', idEl.textContent.trim().replace(/^平台識別碼：/, ''));
-            }
 
-            const u = GM_getValue('_uName', '');
-            const uid = GM_getValue('_uId', '');
-            const label = uid ? (u + ' (' + uid + ')') : u;
-
-            if (GM_getValue('_sn3', '') === u) {
-                window.__BOT_AUTH = true;
-                _initBot();
+    function _gC() {
+        return new Promise((resolve) => {
+            // Check cache first
+            const cached = GM_getValue('_b_c', null);
+            const cacheTime = GM_getValue('_b_t', 0);
+            if (cached && (Date.now() - cacheTime) < _cd) {
+                resolve(JSON.parse(cached));
                 return;
             }
 
-            const dev = navigator.userAgent;
-            const pg = window.location.href;
-            const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+            if (!_k3) { resolve([]); return; }
 
             GM_xmlhttpRequest({
                 method: 'GET',
-                url: 'https://api.ipify.org?format=json',
-                responseType: 'json',
-                onload: function (r) {
-                    const ip = (r.response && r.response.ip) ? r.response.ip : 'N/A';
-                    _send(label, u, dev, ip, pg, ts);
-                },
-                onerror: function () {
-                    _send(label, u, dev, 'N/A', pg, ts);
-                }
-            });
-            return;
-        }
+                url: _k3,
+                onload: function (response) {
+                    try {
+                        const lines = response.responseText.replace(/\r/g, '').trim().split('\n');
+                        const _lst = [];
 
-        if (GM_getValue('_sn3', '')) {
-            window.__BOT_AUTH = true;
-            _initBot();
-        }
+                        // Skip header row (uid, reason, date)
+                        for (let i = 1; i < lines.length; i++) {
+                            const cols = _pL(lines[i]);
+                            if (cols.length >= 1 && cols[0].trim()) {
+                                _lst.push({
+                                    uid: cols[0].trim(),
+                                    reason: cols.length >= 2 ? cols[1].trim() : '',
+                                    date: cols.length >= 3 ? cols[2].trim() : ''
+                                });
+                            }
+                        }
 
-        function _send(name, rawName, dev, ip, pg, time) {
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://ntfy.sh/' + _k1,
-                headers: {
-                    'Authorization': 'Bearer ' + _k0,
-                    'Title': 'Bot Online',
-                    'Priority': '3',
-                    'Tags': 'robot,green_circle'
-                },
-                data: [
-                    'User: ' + name,
-                    'Time: ' + time,
-                    'IP: ' + ip,
-                    'Page: ' + pg,
-                    'UA: ' + dev
-                ].join('\n'),
-                onload: function (resp) {
-                    if (resp.status >= 200 && resp.status < 300) {
-                        GM_setValue('_sn3', rawName);
-                        window.__BOT_AUTH = true;
-                        _initBot();
+                        GM_setValue('_b_c', JSON.stringify(_lst));
+                        GM_setValue('_b_t', Date.now());
+                        resolve(_lst);
+                    } catch (e) {
+
+                        resolve([]);
                     }
                 },
-                onerror: function () { }
+                onerror: function (e) {
+
+                    resolve([]);
+                }
             });
+        });
+    }
+
+    function _pL(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (c === '"') {
+                inQuotes = !inQuotes;
+            } else if (c === ',' && !inQuotes) {
+                result.push(current);
+                current = '';
+            } else {
+                current += c;
+            }
         }
-    })();
+        result.push(current);
+        return result;
+    }
+
+    function _sR(title, color, detail) {
+        const existing = document.getElementById('_sp');
+        if (existing) existing.remove();
+
+        const panel = document.createElement('div');
+        panel.id = '_sp';
+        Object.assign(panel.style, {
+            position: 'fixed',
+            top: '10px',
+            right: '10px',
+            zIndex: '9999999',
+            padding: '15px 20px',
+            background: '#fff',
+            border: `3px solid ${color}`,
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            fontFamily: 'sans-serif',
+            fontSize: '14px',
+            maxWidth: '350px',
+            lineHeight: '1.6'
+        });
+
+        panel.innerHTML = `
+            <div style="font-size:18px;font-weight:bold;color:${color};margin-bottom:8px;text-align:center;">${title}</div>
+            <div style="color:#333;font-weight:bold;text-align:center;">${detail}</div>
+        `;
+        document.body.appendChild(panel);
+    }
+
+    async function _chk() {
+        const uid = _gU();
+        if (!uid) { return; }
+        const _lst = await _gC();
+        const match = _lst.find(entry => entry.uid === uid);
+        if (match) {
+            window.__BOT_AUTH = false;
+            if (window.location.href.includes('index.php') || window.location.pathname === '/' || window.location.pathname === 'mooc/index.php') {
+                _sR('警告', '#f44336', `您不在允許使用名單<br>請立即移除掛網程式`);
+            }
+            if (!window.location.href.includes('mooc/index.php') || window.location.search) {
+                window.location.href = 'https://elearn.hrd.gov.tw/mooc/index.php';
+            }
+        }
+    }
+
+    // _d already declared above
+    const _k2 = _d('u92cq5ycu9Wa0NXZ1F3LulWYt9yZulmbyFWZM1SRt8Gd1F0L1gTN5cjbvlmclh3Lt92YuQnblRnbvNmclNXdiVHa0l2ZucXYy9yL6MHc0RHa');
+    window.__BOT_DB = null;
+    window.__BOT_LOADING = false;
+    window.__BOT_AUTH = true; // Force auth true since blacklist passed
 
     // ---- core ----
     function _initBot() {
-        if (!window.__BOT_AUTH) return;
-
+        // ... (insert full _initBot content here) ...
         const TRUE_VALS = ['○', 'o', 'v', '是', 'true', 'correct', '對', '圈', 'right', '正確', 't'];
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
         const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
@@ -146,16 +204,6 @@
                         if (statusEl) statusEl.innerHTML = `<div style="color:red">❌ 下載失敗</div>`;
                         window.__BOT_LOADING = false; resolve(null);
                     }
-                });
-            });
-        }
-
-        function gmFetch(url) {
-            return new Promise((resolve, reject) => {
-                GM_xmlhttpRequest({
-                    method: "GET", url, responseType: "json",
-                    onload: (res) => resolve(res.response || JSON.parse(res.responseText)),
-                    onerror: reject
                 });
             });
         }
@@ -445,12 +493,27 @@
                         ansHtml = `<div style="color:#059669;font-weight:bold;">✓ ${item.answer}</div>`;
                     }
                     html += `<div class="bot-q-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin-bottom:10px;">
-                        <div style="font-weight:bold;color:#1f2937;margin-bottom:8px;">Q${i + 1}: ${item.question}</div>
-                        ${ansHtml}
+                        <div style="font-weight:bold;color:#1f2937;margin-bottom:6px;">Q${i + 1}: ${item.question}</div>
+                        <div style="color:#059669;font-weight:bold;">答案：${ansHtml.includes('<br>') ? '<br>• ' + ansHtml : ansHtml}</div>
                     </div>`;
                 });
                 html += `</div>`;
                 r.innerHTML = html;
+
+                // Selection Search Listener
+                document.addEventListener('mouseup', () => {
+                    const panel = document.getElementById('bot-exam-panel');
+                    if (panel && panel.style.display !== 'none') {
+                        const sel = window.getSelection().toString().trim();
+                        if (sel && sel.length > 1) {
+                            const input = document.getElementById('bot-input-q');
+                            if (input && input.value !== sel) {
+                                input.value = sel;
+                                doSearch(sel);
+                            }
+                        }
+                    }
+                });
 
                 document.getElementById('bot-back-btn').onclick = () => doSearch(document.getElementById('bot-input-q').value);
 
@@ -558,7 +621,7 @@
                         position: 'fixed', top: '15px', right: '15px', zIndex: '999999', padding: '8px',
                         background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
                         color: '#fff', border: 'none', borderRadius: '5px', cursor: 'pointer',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)', fontWeight: 'bold', fontSize: '13px'
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.15)', fontWeight: 'bold', fontSize: '13px'
                     });
                     btn.onclick = () => {
                         let t = (typeof pTicket !== 'undefined' ? pTicket : null) || (window.parent && window.parent.pTicket);
@@ -700,5 +763,21 @@
             }
         }, 1000);
     }
+    // Start bot immediately
+    setTimeout(() => {
+        if (!window.__BOT_STARTED) {
+            window.__BOT_STARTED = true;
+            _initBot();
+        }
+    }, 300);
+
+    // Check blacklist in parallel (will disable bot if blocked)
+    setTimeout(_chk, 500);
+
+    // Re-check periodically
+    setInterval(() => {
+        GM_setValue('_b_t', 0);
+        _chk();
+    }, _ci);
 
 })();
