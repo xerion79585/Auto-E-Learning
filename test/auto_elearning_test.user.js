@@ -112,8 +112,13 @@
 
         try {
             if (!window.__BOT_DB) {
-                await loadDatabase(null); // Simple load
-                if (!window.__BOT_DB) throw new Error("無題庫");
+                const statusDiv = document.createElement('div');
+                statusDiv.style.marginBottom = '5px';
+                logArea.prepend(statusDiv);
+
+                await loadDatabase(statusDiv); // Pass div to show progress
+
+                if (!window.__BOT_DB) throw new Error("無題庫下載失敗");
             }
 
             // Build index for [Q, A] format
