@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @connect      docs.google.com
 // @connect      *
 // @run-at       document-idle
 // ==/UserScript==
