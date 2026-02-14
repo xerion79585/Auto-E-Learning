@@ -245,21 +245,14 @@
                 }
                 window.__BOT_LOADING = true;
                 if (statusEl) statusEl.innerHTML = `
-                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫...</div>
-                    <div style="width:100%;background:#eee;border-radius:4px;height:10px;overflow:hidden;">
-                        <div id="bot-dl-progress" style="width:0%;height:100%;background:#28a745;transition:width 0.2s;"></div>
-                    </div>
-                    <div id="bot-dl-text" style="font-size:11px;color:#666;text-align:right;">0%</div>
+                    <div style="color:blue;margin-bottom:5px;">☁️ 下載題庫中...</div>
+                    <div id="bot-dl-text" style="font-size:12px;color:#666;">0 MB</div>
                 `;
                 GM_xmlhttpRequest({
                     method: "GET", url: _k2, responseType: "json",
                     onprogress: (e) => {
-                        const total = e.lengthComputable ? e.total : 65000000;
-                        const pct = Math.min(99, Math.floor((e.loaded / total) * 100));
-                        const pBar = document.getElementById('bot-dl-progress');
                         const pTxt = document.getElementById('bot-dl-text');
-                        if (pBar) pBar.style.width = pct + '%';
-                        if (pTxt) pTxt.innerText = `${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB${e.lengthComputable ? ' / ' + (e.total / 1024 / 1024).toFixed(1) + 'MB' : ''})`;
+                        if (pTxt) pTxt.innerText = `已下載 ${(e.loaded / 1024 / 1024).toFixed(1)} MB...`;
                     },
                     onload: (response) => {
                         try {
@@ -414,10 +407,7 @@
                             <div style="background:#fff;border-radius:16px;padding:40px 50px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:350px;">
                                 <div style="font-size:40px;margin-bottom:10px;">☁️</div>
                                 <div style="font-size:18px;font-weight:bold;margin-bottom:5px;">下載題庫中...</div>
-                                <div style="width:100%;background:#eee;border-radius:6px;height:14px;overflow:hidden;">
-                                    <div id="bot-dl-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#28a745,#20c997);transition:width 0.3s;border-radius:6px;"></div>
-                                </div>
-                                <div id="bot-dl-text" style="font-size:13px;color:#666;margin-top:8px;">0%</div>
+                                <div id="bot-dl-text" style="font-size:14px;color:#666;margin-top:8px;">0 MB</div>
                             </div>`;
                         document.body.appendChild(dlOverlay);
                     }
