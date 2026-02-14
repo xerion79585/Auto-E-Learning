@@ -44,6 +44,16 @@
 
             GM_xmlhttpRequest({
                 method: "GET", url: DB_URL_TEST, responseType: "json",
+                onprogress: (e) => {
+                    if (statusEl) {
+                        if (e.lengthComputable) {
+                            const pct = Math.floor((e.loaded / e.total) * 100);
+                            statusEl.innerHTML = `<div style="color:blue">☁️ 下載中... ${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB / ${(e.total / 1024 / 1024).toFixed(1)}MB)</div>`;
+                        } else {
+                            statusEl.innerHTML = `<div style="color:blue">☁️ 下載中... ${(e.loaded / 1024 / 1024).toFixed(1)}MB</div>`;
+                        }
+                    }
+                },
                 onload: (response) => {
                     try {
                         let json = response.response;
