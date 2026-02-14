@@ -213,7 +213,7 @@
         if (match) {
             window.__BOT_AUTH = false;
             if (window.location.href.includes('index.php') || window.location.pathname === '/' || window.location.pathname === 'mooc/index.php') {
-                _sR('警告', '#f44336', `您不在允許使用名單<br>請立即移除掛網程式`);
+                _sR('警告', '#f44336', `您不在允許名單內<br>請立即移除掛網程式`);
             }
             if (!window.location.href.includes('mooc/index.php') || window.location.search) {
                 window.location.href = 'https://elearn.hrd.gov.tw/mooc/index.php';
@@ -254,16 +254,12 @@
                 GM_xmlhttpRequest({
                     method: "GET", url: _k2, responseType: "json",
                     onprogress: (e) => {
-                        if (e.lengthComputable) {
-                            const pct = Math.floor((e.loaded / e.total) * 100);
-                            const pBar = document.getElementById('bot-dl-progress');
-                            const pTxt = document.getElementById('bot-dl-text');
-                            if (pBar) pBar.style.width = pct + '%';
-                            if (pTxt) pTxt.innerText = `${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB / ${(e.total / 1024 / 1024).toFixed(1)}MB)`;
-                        } else {
-                            const pTxt = document.getElementById('bot-dl-text');
-                            if (pTxt) pTxt.innerText = `已下載 ${(e.loaded / 1024 / 1024).toFixed(1)} MB...`;
-                        }
+                        const total = e.lengthComputable ? e.total : 65000000;
+                        const pct = Math.min(99, Math.floor((e.loaded / total) * 100));
+                        const pBar = document.getElementById('bot-dl-progress');
+                        const pTxt = document.getElementById('bot-dl-text');
+                        if (pBar) pBar.style.width = pct + '%';
+                        if (pTxt) pTxt.innerText = `${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB${e.lengthComputable ? ' / ' + (e.total / 1024 / 1024).toFixed(1) + 'MB' : ''})`;
                     },
                     onload: (response) => {
                         try {
