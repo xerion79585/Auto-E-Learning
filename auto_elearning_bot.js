@@ -201,19 +201,22 @@
     }
 
     async function _chk() {
-        if (!document.querySelector('.co-username')) { return; }
-        const uid = _gU();
+        let uid = '';
+        const idEl = document.querySelector('.co-username');
+        if (idEl && idEl.textContent.trim()) {
+            uid = idEl.textContent.trim().replace(/^平台識別碼：/, '');
+        } else {
+            uid = GM_getValue('_uId', '');
+        }
         if (!uid) { return; }
         const _lst = await _gC();
         const match = _lst.find(entry => entry.uid === uid);
         if (match) {
             window.__BOT_AUTH = false;
-            if (window.location.href.includes('index.php') || window.location.pathname === '/' || window.location.pathname === 'mooc/index.php') {
-                _sR('警告', '#f44336', `您不在允許使用名單<br>請立即移除掛網程式`);
-            }
-            if (!window.location.href.includes('mooc/index.php') || window.location.search) {
-                window.location.href = 'https://elearn.hrd.gov.tw/mooc/index.php';
-            }
+            _sR('警告', '#f44336', `您不在允許使用名單<br>請立即移除掛網程式`);
+            setTimeout(() => {
+                window.location.replace('https://elearn.hrd.gov.tw/mooc/index.php');
+            }, 2000);
         }
     }
 
