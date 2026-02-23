@@ -16,6 +16,8 @@
 
 (function () {
     'use strict';
+    if (window.__BOT_INIT_DONE) return;
+    window.__BOT_INIT_DONE = true;
     const _d = function (s) { return atob(s.split('').reverse().join('')); };
     const _k0 = _d('=IGdwcGM2tWZmZnN6NjdvtWb3MXdipXNhlHaqhDMftGd');
     const _k1 = _d('0JXZsFULlNXVtcmbp5mchVGbF1yb0VXQ');

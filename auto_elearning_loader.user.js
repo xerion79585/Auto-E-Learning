@@ -47,7 +47,7 @@
                     if (r.status === 200 && r.responseText) {
                         GM_setValue(_ck, r.responseText);
                         GM_setValue(_ct, _n);
-                        if (!_c) _e(r.responseText);
+                        if (!_c || isHome) _e(r.responseText);
                     }
                 }
             });
