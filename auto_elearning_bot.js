@@ -1,18 +1,3 @@
-// ==UserScript==
-// @name         Auto E-Learning Helper
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  E-Learning 輔助工具
-// @author       Shengyang
-// @match        *://elearn.hrd.gov.tw/*
-// @match        *://*.hrd.gov.tw/*
-// @grant        GM_xmlhttpRequest
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @connect      docs.google.com
-// @connect      *
-// @run-at       document-idle
-// ==/UserScript==
 
 (function () {
     'use strict';
@@ -826,7 +811,202 @@
                     }, 500);
                 }
             }
+
+            // 5. dashboard - open all courses button
+            if (url.includes('learn_dashboard.php')) {
+                if (!document.getElementById('open-all-courses-btn')) {
+                    _setupDashboardOpenAll();
+                }
+            }
         }, 1000);
+
+        // ---- dashboard: open all courses ----
+        function _setupDashboardOpenAll() {
+            const OAC_DELAY_TABS = 400;
+            const OAC_DELAY_PAGES = 1500;
+            const OAC_LINK_SEL = '.course-list-block a[href*="/info/"]';
+
+            // inject styles
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes oac-pulse {
+                    0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.5); }
+                    70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
+                    100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
+                }
+                @keyframes oac-shimmer {
+                    0% { background-position: -200% center; }
+                    100% { background-position: 200% center; }
+                }
+                @keyframes oac-spin { to { transform: rotate(360deg); } }
+                #open-all-courses-btn {
+                    display: inline-flex !important; align-items: center !important; gap: 8px !important;
+                    padding: 10px 26px !important; font-size: 15px !important; font-weight: 700 !important;
+                    color: #fff !important;
+                    background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff6b35 100%) !important;
+                    background-size: 200% auto !important; border: none !important; border-radius: 25px !important;
+                    cursor: pointer !important; transition: all 0.3s ease !important; text-decoration: none !important;
+                    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4) !important; letter-spacing: 1px !important;
+                    white-space: nowrap !important; animation: oac-pulse 2s infinite !important; position: relative !important;
+                }
+                #open-all-courses-btn:hover {
+                    transform: translateY(-2px) scale(1.03) !important;
+                    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.55) !important;
+                    animation: oac-shimmer 1.5s linear infinite !important;
+                }
+                #open-all-courses-btn.oac-loading {
+                    background: linear-gradient(135deg, #888 0%, #aaa 100%) !important;
+                    animation: none !important; cursor: not-allowed !important; opacity: 0.7 !important;
+                }
+                #open-all-courses-btn .oac-icon { font-size: 18px; line-height: 1; }
+                #open-all-courses-btn .oac-spinner {
+                    display: none; width: 16px; height: 16px;
+                    border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff;
+                    border-radius: 50%; animation: oac-spin 0.7s linear infinite;
+                }
+                #open-all-courses-btn.oac-loading .oac-icon { display: none; }
+                #open-all-courses-btn.oac-loading .oac-spinner { display: inline-block; }
+                #open-all-courses-status {
+                    display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+                    font-size: 13px; font-weight: 600; border-radius: 20px; white-space: nowrap;
+                    transition: all 0.3s ease; opacity: 0; transform: translateX(-8px);
+                }
+                #open-all-courses-status.oac-visible { opacity: 1; transform: translateX(0); }
+                #open-all-courses-status.oac-info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+                #open-all-courses-status.oac-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+                #open-all-courses-status.oac-warn { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+                #open-all-courses-status.oac-error { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
+            `;
+            document.head.appendChild(style);
+
+            function _oacStatus(text, type) {
+                const el = document.getElementById('open-all-courses-status');
+                if (!el) return;
+                el.textContent = text;
+                el.className = text ? ('oac-visible oac-' + type) : '';
+            }
+
+            // inject button
+            const btnBar = document.querySelector('.card-search-btnBar');
+            const container = document.createElement('div');
+            container.id = 'open-all-courses-container';
+            container.className = 'col-sm-8';
+            container.style.cssText = 'display:flex;align-items:center;gap:14px;padding:0 15px;';
+
+            const btn = document.createElement('a');
+            btn.id = 'open-all-courses-btn';
+            btn.href = 'javascript:void(0)';
+            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程';
+
+            const statusEl = document.createElement('span');
+            statusEl.id = 'open-all-courses-status';
+
+            container.appendChild(btn);
+            container.appendChild(statusEl);
+
+            if (btnBar) {
+                btnBar.appendChild(container);
+            } else {
+                const sb = document.querySelector('.dn-search-bar');
+                if (sb) sb.parentNode.insertBefore(container, sb.nextSibling);
+            }
+
+            btn.addEventListener('click', async function () {
+                btn.classList.add('oac-loading');
+                try {
+                    // pagination info
+                    const afterEl = document.querySelector('.paginate-number-after');
+                    let totalPages = 1;
+                    if (afterEl) { const m = afterEl.textContent.match(/\/\s*(\d+)/); if (m) totalPages = parseInt(m[1], 10); }
+                    const msgEl = document.querySelector('.paginate-message');
+                    let totalItems = 0;
+                    if (msgEl) { const m = msgEl.textContent.match(/共\s*(\d+)\s*筆/); if (m) totalItems = parseInt(m[1], 10); }
+                    const pageInput = document.querySelector('.paginate-number');
+                    const currentPage = pageInput ? (parseInt(pageInput.value, 10) || 1) : 1;
+
+                    _oacStatus('偵測到 ' + totalItems + ' 門課程，共 ' + totalPages + ' 頁', 'info');
+
+                    const allLinks = new Set();
+                    const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+                    function _waitDOM(timeout) {
+                        return new Promise(resolve => {
+                            const ca = document.querySelector('.course-list-block');
+                            if (!ca) { setTimeout(resolve, timeout); return; }
+                            let done = false;
+                            const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
+                            obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
+                            setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
+                        });
+                    }
+
+                    function _goPage(num) {
+                        if (typeof window.page !== 'undefined') window.page = num - 1;
+                        const pi = document.querySelector('.paginate-number');
+                        if (pi) {
+                            pi.value = num;
+                            pi.dispatchEvent(new Event('change', { bubbles: true }));
+                            pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                        }
+                        if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
+                    }
+
+                    for (let p = 1; p <= totalPages; p++) {
+                        _oacStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
+                        if (p !== currentPage) { _goPage(p); await _waitDOM(OAC_DELAY_PAGES); await _sleep(800); }
+                        document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
+                    }
+
+                    const links = [...allLinks];
+                    if (links.length === 0) { _oacStatus('沒有找到任何課程連結', 'warn'); btn.classList.remove('oac-loading'); return; }
+
+                    _oacStatus('找到 ' + links.length + ' 門課程，開啟中...', 'info');
+                    let opened = 0;
+                    let blocked = 0;
+                    const hasGMOpen = typeof GM_openInTab === 'function';
+                    for (const link of links) {
+                        if (hasGMOpen) {
+                            GM_openInTab(link, { active: false, insert: true, setParent: true });
+                            opened++;
+                        } else {
+                            const w = window.open(link, '_blank');
+                            if (w) { opened++; } else { blocked++; }
+                        }
+                        _oacStatus('已開啟 ' + opened + ' / ' + links.length, 'info');
+                        await _sleep(OAC_DELAY_TABS);
+                    }
+                    if (currentPage !== totalPages) _goPage(currentPage);
+                    if (blocked > 0) {
+                        _oacStatus('開啟 ' + opened + ' 個，' + blocked + ' 個被阻擋', 'warn');
+                        // 顯示明顯的頁面內提示
+                        const modal = document.createElement('div');
+                        modal.id = 'oac-block-modal';
+                        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:9999999;display:flex;align-items:center;justify-content:center;';
+                        modal.innerHTML = `
+                            <div style="background:#fff;border-radius:16px;padding:30px 35px;max-width:480px;box-shadow:0 10px 40px rgba(0,0,0,0.3);text-align:center;font-family:sans-serif;">
+                                <div style="font-size:48px;margin-bottom:10px;">🚫</div>
+                                <div style="font-size:20px;font-weight:bold;color:#e65100;margin-bottom:12px;">瀏覽器阻擋了彈出式視窗</div>
+                                <div style="font-size:14px;color:#333;line-height:1.8;text-align:left;margin-bottom:16px;">
+                                    成功開啟 <b style="color:#2e7d32;">${opened}</b> 個，被阻擋 <b style="color:#c62828;">${blocked}</b> 個<br><br>
+                                    <b>解決方式（擇一）：</b><br>
+                                    ① 點擊網址列右方的 <span style="background:#eee;padding:2px 6px;border-radius:4px;">🚫 阻擋圖示</span>，選擇「<b>一律允許</b>」後重試<br>
+                                    ② 請管理員更新 Loader 腳本以支援 GM_openInTab
+                                </div>
+                                <button id="oac-block-close" style="padding:10px 30px;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(135deg,#ff6b35,#f7931e);border:none;border-radius:25px;cursor:pointer;box-shadow:0 3px 10px rgba(255,107,53,0.3);">知道了</button>
+                            </div>
+                        `;
+                        document.body.appendChild(modal);
+                        document.getElementById('oac-block-close').onclick = () => modal.remove();
+                        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+                    } else {
+                        _oacStatus('完成！已開啟全部 ' + opened + ' 門課程', 'success');
+                    }
+                } catch (err) {
+                    _oacStatus('錯誤: ' + err.message, 'error');
+                }
+                btn.classList.remove('oac-loading');
+            });
+        }
     }
     // Start bot immediately
     setTimeout(() => {

