@@ -12,8 +12,12 @@
 (function () {
     'use strict';
 
-    // 只在 learn_dashboard.php 頁面執行
+    // 只在 learn_dashboard.php 的未完成 tab 執行
     if (!window.location.href.includes('learn_dashboard.php')) return;
+    if (!window.location.href.includes('tab=1')) {
+        // 如果沒有 tab 參數，檢查是否在未完成 tab
+        if (window.location.href.includes('tab=')) return;
+    }
 
     // ---- 設定 ----
     const DELAY_BETWEEN_TABS = 400;       // 每個分頁間的延遲 (ms)
@@ -298,23 +302,25 @@
 
         try {
             const { totalPages, totalItems, currentPage } = getPaginationInfo();
-            setStatus(`📊 偵測到 ${totalItems} 門課程，共 ${totalPages} 頁`, 'info');
 
             const allLinks = new Set();
 
-            // 收集每一頁的課程連結
-            for (let p = 1; p <= totalPages; p++) {
-                setStatus(`正在掃描第 ${p} / ${totalPages} 頁...`, 'info');
+            // 先收集當前頁面上已有的課程連結
+            getCurrentPageLinks().forEach(link => allLinks.add(link));
 
-                if (p !== currentPage) {
+            // 如果有多頁，再掃描其他頁
+            if (totalPages > 1) {
+                setStatus('偵測到 ' + totalPages + ' 頁，掃描中...', 'info');
+                for (let p = 1; p <= totalPages; p++) {
+                    if (p === currentPage) continue;
+                    setStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
                     goToPage(p);
                     await waitForDOMUpdate(DELAY_BETWEEN_PAGES);
                     await sleep(800);
+                    getCurrentPageLinks().forEach(link => allLinks.add(link));
+                    console.log(`[OpenAll] 第 ${p} 頁收集到連結`);
                 }
-
-                const pageLinks = getCurrentPageLinks();
-                pageLinks.forEach(link => allLinks.add(link));
-                console.log(`[OpenAll] 第 ${p} 頁收集到 ${pageLinks.length} 個連結`);
+                if (currentPage !== totalPages) goToPage(currentPage);
             }
 
             const uniqueLinks = [...allLinks];

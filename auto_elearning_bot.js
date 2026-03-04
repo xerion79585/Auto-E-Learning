@@ -812,9 +812,14 @@
                 }
             }
 
-            // 5. dashboard - open all courses button
-            if (url.includes('learn_dashboard.php')) {
-                if (!document.getElementById('open-all-courses-btn')) {
+            // 5. dashboard - open all courses button (only on 未完成 tab)
+            if (url.includes('learn_dashboard.php') && (url.includes('tab=1') || (!url.includes('tab=') && document.querySelector('.nav-link.active, [class*=tab][class*=active]')))) {
+                var isTab1 = url.includes('tab=1');
+                if (!isTab1) {
+                    var activeTab = document.querySelector('.nav-link.active, [class*=tab][class*=active]');
+                    isTab1 = activeTab && activeTab.textContent.includes('未完成');
+                }
+                if (isTab1 && !document.getElementById('open-all-courses-btn')) {
                     _setupDashboardOpenAll();
                 }
             }
@@ -918,43 +923,49 @@
                     const afterEl = document.querySelector('.paginate-number-after');
                     let totalPages = 1;
                     if (afterEl) { const m = afterEl.textContent.match(/\/\s*(\d+)/); if (m) totalPages = parseInt(m[1], 10); }
-                    const msgEl = document.querySelector('.paginate-message');
-                    let totalItems = 0;
-                    if (msgEl) { const m = msgEl.textContent.match(/共\s*(\d+)\s*筆/); if (m) totalItems = parseInt(m[1], 10); }
                     const pageInput = document.querySelector('.paginate-number');
                     const currentPage = pageInput ? (parseInt(pageInput.value, 10) || 1) : 1;
-
-                    _oacStatus('偵測到 ' + totalItems + ' 門課程，共 ' + totalPages + ' 頁', 'info');
 
                     const allLinks = new Set();
                     const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-                    function _waitDOM(timeout) {
-                        return new Promise(resolve => {
-                            const ca = document.querySelector('.course-list-block');
-                            if (!ca) { setTimeout(resolve, timeout); return; }
-                            let done = false;
-                            const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
-                            obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
-                            setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
-                        });
-                    }
+                    // 先收集當前頁面上已有的課程連結
+                    document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
 
-                    function _goPage(num) {
-                        if (typeof window.page !== 'undefined') window.page = num - 1;
-                        const pi = document.querySelector('.paginate-number');
-                        if (pi) {
-                            pi.value = num;
-                            pi.dispatchEvent(new Event('change', { bubbles: true }));
-                            pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                    // 如果有多頁，再掃描其他頁
+                    if (totalPages > 1) {
+                        _oacStatus('偵測到 ' + totalPages + ' 頁，掃描中...', 'info');
+
+                        function _waitDOM(timeout) {
+                            return new Promise(resolve => {
+                                const ca = document.querySelector('.course-list-block');
+                                if (!ca) { setTimeout(resolve, timeout); return; }
+                                let done = false;
+                                const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
+                                obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
+                                setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
+                            });
                         }
-                        if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
-                    }
 
-                    for (let p = 1; p <= totalPages; p++) {
-                        _oacStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
-                        if (p !== currentPage) { _goPage(p); await _waitDOM(OAC_DELAY_PAGES); await _sleep(800); }
-                        document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
+                        function _goPage(num) {
+                            if (typeof window.page !== 'undefined') window.page = num - 1;
+                            const pi = document.querySelector('.paginate-number');
+                            if (pi) {
+                                pi.value = num;
+                                pi.dispatchEvent(new Event('change', { bubbles: true }));
+                                pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                            }
+                            if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
+                        }
+
+                        for (let p = 1; p <= totalPages; p++) {
+                            if (p === currentPage) continue; // 當前頁已收集
+                            _oacStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
+                            _goPage(p); await _waitDOM(OAC_DELAY_PAGES); await _sleep(800);
+                            document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
+                        }
+                        // 切回原來的頁碼
+                        if (currentPage !== totalPages) _goPage(currentPage);
                     }
 
                     const links = [...allLinks];
