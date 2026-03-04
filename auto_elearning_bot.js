@@ -929,6 +929,26 @@
                     const allLinks = new Set();
                     const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+                    const _waitDOM = (timeout) => new Promise(resolve => {
+                        const ca = document.querySelector('.course-list-block');
+                        if (!ca) { setTimeout(resolve, timeout); return; }
+                        let done = false;
+                        const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
+                        obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
+                        setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
+                    });
+
+                    const _goPage = (num) => {
+                        if (typeof window.page !== 'undefined') window.page = num - 1;
+                        const pi = document.querySelector('.paginate-number');
+                        if (pi) {
+                            pi.value = num;
+                            pi.dispatchEvent(new Event('change', { bubbles: true }));
+                            pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+                        }
+                        if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
+                    };
+
                     // 先收集當前頁面上已有的課程連結
                     document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
 
@@ -936,35 +956,12 @@
                     if (totalPages > 1) {
                         _oacStatus('偵測到 ' + totalPages + ' 頁，掃描中...', 'info');
 
-                        function _waitDOM(timeout) {
-                            return new Promise(resolve => {
-                                const ca = document.querySelector('.course-list-block');
-                                if (!ca) { setTimeout(resolve, timeout); return; }
-                                let done = false;
-                                const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
-                                obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
-                                setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
-                            });
-                        }
-
-                        function _goPage(num) {
-                            if (typeof window.page !== 'undefined') window.page = num - 1;
-                            const pi = document.querySelector('.paginate-number');
-                            if (pi) {
-                                pi.value = num;
-                                pi.dispatchEvent(new Event('change', { bubbles: true }));
-                                pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                            }
-                            if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
-                        }
-
                         for (let p = 1; p <= totalPages; p++) {
-                            if (p === currentPage) continue; // 當前頁已收集
+                            if (p === currentPage) continue;
                             _oacStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
                             _goPage(p); await _waitDOM(OAC_DELAY_PAGES); await _sleep(800);
                             document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
                         }
-                        // 切回原來的頁碼
                         if (currentPage !== totalPages) _goPage(currentPage);
                     }
 
