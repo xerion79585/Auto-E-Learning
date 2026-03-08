@@ -722,34 +722,12 @@
                     GM_setValue('_b_t', 0);
                 } catch (e) { console.log('[強制登出] GM清除錯誤:', e); }
 
-                // 4. 先打開 /logout.php 用 iframe 清除 server session，然後導向 SSO 登出
-                var iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = '/logout.php';
-                document.body.appendChild(iframe);
-
-                // 5. 等 iframe 載入完後，嘗試多個 SSO 登出 URL
-                setTimeout(function() {
-                    try { iframe.remove(); } catch(e) {}
-
-                    var ssoLogoutUrls = [
-                        'https://ecpa.dgpa.gov.tw/CasAuth/logout',
-                        'https://sso.dgpa.gov.tw/pmsso/logout.aspx',
-                        'https://ecpa.dgpa.gov.tw/pks/logout.aspx'
-                    ];
-
-                    ssoLogoutUrls.forEach(function(url) {
-                        var ssoFrame = document.createElement('iframe');
-                        ssoFrame.style.display = 'none';
-                        ssoFrame.src = url;
-                        document.body.appendChild(ssoFrame);
-                        setTimeout(function() { try { ssoFrame.remove(); } catch(e) {} }, 3000);
-                    });
-
-                    setTimeout(function() {
-                        window.location.replace('https://elearn.hrd.gov.tw/');
-                    }, 2000);
-                }, 1000);
+                // 4. 用 fetch 清除 elearn server session (同源，Set-Cookie 會生效)
+                //    然後直接導向 SSO 登出頁面（不用 iframe，否則會被 X-Frame-Options 擋）
+                fetch('/logout.php', { credentials: 'include' }).finally(function() {
+                    // 導向 SSO 登出，這會清除 ecpa.dgpa.gov.tw 的 session cookie
+                    window.location.replace('https://ecpa.dgpa.gov.tw/CasAuth/logout');
+                });
             });
 
             logoutBtn.parentNode.insertBefore(btn, logoutBtn.nextSibling);
