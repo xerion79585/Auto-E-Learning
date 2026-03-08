@@ -713,16 +713,13 @@
                 try { localStorage.clear(); } catch (e) {}
                 try { sessionStorage.clear(); } catch (e) {}
 
-                // 3. Clear GM values
+                // 3. Clear GM values (保留 _m0, _m1, _m2 loader 啟用資料)
                 try {
                     GM_setValue('_sn3', '');
                     GM_setValue('_uName', '');
                     GM_setValue('_uId', '');
                     GM_setValue('_b_c', '');
                     GM_setValue('_b_t', 0);
-                    GM_setValue('_m0', '');
-                    GM_setValue('_m1', 0);
-                    GM_setValue('_m2', '');
                 } catch (e) { console.log('[強制登出] GM清除錯誤:', e); }
 
                 // 4. 先打開 /logout.php 用 iframe 清除 server session，然後導向 SSO 登出
