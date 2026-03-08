@@ -656,94 +656,11 @@
             }, 1000);
         }
 
-        // ---- force logout button ----
-        function injectForceLogoutButton() {
-            if (document.getElementById('bot-btn-force-logout')) return;
-            const logoutBtn = document.querySelector('a.logined-btn[href="/logout.php"]');
-            if (!logoutBtn) return;
-
-            const btn = document.createElement('a');
-            btn.id = 'bot-btn-force-logout';
-            btn.href = 'javascript:void(0)';
-            btn.title = '強制登出（含 SSO）';
-            btn.className = 'logined-btn';
-            btn.innerHTML = '<i class="fa fa-power-off" aria-hidden="true" style="margin-right:3px;"></i>強制登出';
-            Object.assign(btn.style, {
-                background: 'linear-gradient(135deg, #e53935 0%, #b71c1c 100%)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '20px',
-                padding: '6px 14px',
-                marginLeft: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                lineHeight: '1',
-                boxShadow: '0 2px 6px rgba(229,57,53,0.4)',
-                transition: 'all 0.2s ease'
-            });
-            btn.onmouseover = function() { btn.style.transform = 'scale(1.05)'; btn.style.boxShadow = '0 4px 12px rgba(229,57,53,0.6)'; };
-            btn.onmouseout = function() { btn.style.transform = 'scale(1)'; btn.style.boxShadow = '0 2px 6px rgba(229,57,53,0.4)'; };
-
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!confirm('確定要強制登出？\n這將清除所有登入狀態（包含 SSO），\n下次登入需要重新輸入帳號密碼。')) return;
-
-                btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 登出中...';
-                btn.style.pointerEvents = 'none';
-
-                // 1. Clear all accessible cookies
-                try {
-                    document.cookie.split(';').forEach(function(c) {
-                        var name = c.split('=')[0].trim();
-                        if (name) {
-                            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
-                            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.hrd.gov.tw';
-                            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=elearn.hrd.gov.tw';
-                        }
-                    });
-                } catch (e) { console.log('[強制登出] Cookie清除錯誤:', e); }
-
-                // 2. Clear localStorage & sessionStorage
-                try { localStorage.clear(); } catch (e) {}
-                try { sessionStorage.clear(); } catch (e) {}
-
-                // 3. Clear GM values (保留 _m0, _m1, _m2 loader 啟用資料)
-                try {
-                    GM_setValue('_sn3', '');
-                    GM_setValue('_uName', '');
-                    GM_setValue('_uId', '');
-                    GM_setValue('_b_c', '');
-                    GM_setValue('_b_t', 0);
-                } catch (e) { console.log('[強制登出] GM清除錯誤:', e); }
-
-                // 4. 用 fetch 清除 elearn server session (同源，Set-Cookie 會生效)
-                //    然後直接導向 SSO 登出頁面（不用 iframe，否則會被 X-Frame-Options 擋）
-                fetch('/logout.php', { credentials: 'include' }).finally(function() {
-                    // 導向 SSO 登出，這會清除 ecpa.dgpa.gov.tw 的 session cookie
-                    window.location.replace('https://ecpa.dgpa.gov.tw/CasAuth/logout');
-                });
-            });
-
-            logoutBtn.parentNode.insertBefore(btn, logoutBtn.nextSibling);
-        }
-
-        // Inject force logout button on every page load (with slight delay for DOM)
-        setTimeout(injectForceLogoutButton, 500);
-
 
         // ---- main loop ----
         setInterval(() => {
             if (!window.__BOT_AUTH) return;
             const url = window.location.href;
-
-            // 0. Ensure force logout button is injected
-            injectForceLogoutButton();
 
             // 1. path tree - left toolbar with hang button (OLD STYLE)
             if (url.includes('pathtree.php')) {
