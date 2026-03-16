@@ -1,3 +1,19 @@
+// ==UserScript==
+// @name         Auto eLearning Bot Direct
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Standalone Tampermonkey version of auto_elearning_bot.js
+// @author       AutoElearning
+// @match        *://elearn.hrd.gov.tw/*
+// @match        *://*.hrd.gov.tw/*
+// @match        *://www.cp.gov.tw/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_openInTab
+// @connect      *
+// @run-at       document-idle
+// ==/UserScript==
 
 (function () {
     'use strict';
@@ -685,7 +701,6 @@
                 }
             }, 1000);
         }
-
 
         // ---- main loop ----
         setInterval(() => {
