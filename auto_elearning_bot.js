@@ -17,6 +17,8 @@
 
         if (window.location.href.includes('login') || window.location.href.includes('logout')) {
             GM_setValue('_sn3', '');
+            GM_setValue('_uId', '');
+            GM_setValue('_uName', '');
         }
 
         if (nameEl && nameEl.textContent.trim()) {
@@ -79,15 +81,18 @@
         }
     }
     function _gU() {
-        // Try reading from page element first
+        // Prefer the current page's logged-in identity.
         const idEl = document.querySelector('.co-username');
         if (idEl && idEl.textContent.trim()) {
             const uid = idEl.textContent.trim().replace(/^平台識別碼：/, '');
             GM_setValue('_uId', uid);
             return uid;
         }
-        // Fallback: read from GM cache
-        return GM_getValue('_uId', '');
+        // Only rely on the cached uid while on active course ticket pages.
+        if (window.location.href.includes('ticket=')) {
+            return GM_getValue('_uId', '');
+        }
+        return '';
     }
 
 
@@ -224,7 +229,12 @@
 
     async function _chk() {
         const uid = _gU();
-        if (!uid) { return false; }
+        if (!uid) {
+            window.__BOT_AUTH = false;
+            const prompt = document.getElementById('_sp');
+            if (prompt) prompt.remove();
+            return false;
+        }
         const _lst = await _gC();
         const allowed = _lst.some(entry => entry.uid === uid);
         if (allowed) {
