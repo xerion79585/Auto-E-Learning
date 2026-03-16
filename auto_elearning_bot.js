@@ -88,11 +88,9 @@
             GM_setValue('_uId', uid);
             return uid;
         }
-        // Only rely on the cached uid while on active course ticket pages.
-        if (window.location.href.includes('ticket=')) {
-            return GM_getValue('_uId', '');
-        }
-        return '';
+        // 白名單模式：在任何頁面都 fallback 到快取的 UID
+        // 使用者在首頁/儀表板登入時 UID 已被快取
+        return GM_getValue('_uId', '');
     }
 
 
