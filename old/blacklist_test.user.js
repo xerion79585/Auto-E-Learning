@@ -1,111 +1,34 @@
 // ==UserScript==
-// @name         Auto eLearning Bot Direct
+// @name         Auto E-Learning Helper
 // @namespace    http://tampermonkey.net/
 // @version      1.0
-// @description  Standalone Tampermonkey version of auto_elearning_bot.js
-// @author       AutoElearning
+// @description  E-Learning 輔助工具
+// @author       Shengyang
 // @match        *://elearn.hrd.gov.tw/*
 // @match        *://*.hrd.gov.tw/*
-// @match        *://www.cp.gov.tw/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @grant        GM_openInTab
+// @connect      docs.google.com
 // @connect      *
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
     'use strict';
-    if (window.__BOT_INIT_DONE) return;
-    window.__BOT_INIT_DONE = true;
     const _d = function (s) { return atob(s.split('').reverse().join('')); };
-    const _k0 = _d('=IGdwcGM2tWZmZnN6NjdvtWb3MXdipXNhlHaqhDMftGd');
-    const _k1 = _d('0JXZsFULlNXVtcmbp5mchVGbF1yb0VXQ');
     const _k3 = _d('==gdzNWP0VHc0V3b/IWdw9CSZhHO28kbmVGW6ZDd1okVrdVQ0U2XZpXdMlWRfFXN3NESsFzaEJ3dI5kVZFWMVlVNysUUV5Ubq5Ge1Z3YzQTRUV0cfRGNKR2Ui9mbTJldx0CWDFEUy8SZvQ2LzRXZlh2ckFWZyB3cv02bj5SZsd2bvdmLzN2bk9yL6MHc0RHa');
     const _cd = 0xea60;
     const _ci = 0xea60;
-
-    // ---- ntfy login notification ----
-    function _notifyLoginAllowed() {
-        const nameEl = document.querySelector('.co-realname');
-        const idEl = document.querySelector('.co-username');
-
-        if (window.location.href.includes('login') || window.location.href.includes('logout')) {
-            GM_setValue('_sn3', '');
-            GM_setValue('_uId', '');
-            GM_setValue('_uName', '');
-        }
-
-        if (nameEl && nameEl.textContent.trim()) {
-            GM_setValue('_uName', nameEl.textContent.trim());
-            if (idEl && idEl.textContent.trim()) {
-                GM_setValue('_uId', idEl.textContent.trim().replace(/^平台識別碼：/, ''));
-            }
-
-            const u = GM_getValue('_uName', '');
-            const uid = GM_getValue('_uId', '');
-            const label = uid ? (u + ' (' + uid + ')') : u;
-
-            if (GM_getValue('_sn3', '') === u) {
-                return;
-            }
-
-            const dev = navigator.userAgent;
-            const pg = window.location.href;
-            const ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: 'https://api.ipify.org?format=json',
-                responseType: 'json',
-                onload: function (r) {
-                    const ip = (r.response && r.response.ip) ? r.response.ip : 'N/A';
-                    _send(label, u, dev, ip, pg, ts);
-                },
-                onerror: function () {
-                    _send(label, u, dev, 'N/A', pg, ts);
-                }
-            });
-            return;
-        }
-
-        function _send(name, rawName, dev, ip, pg, time) {
-            GM_xmlhttpRequest({
-                method: 'POST',
-                url: 'https://ntfy.sh/' + _k1,
-                headers: {
-                    'Authorization': 'Bearer ' + _k0,
-                    'Title': 'Bot Online',
-                    'Priority': '3',
-                    'Tags': 'robot,green_circle'
-                },
-                data: [
-                    'User: ' + name,
-                    'Time: ' + time,
-                    'IP: ' + ip,
-                    'Page: ' + pg,
-                    'UA: ' + dev
-                ].join('\n'),
-                onload: function (resp) {
-                    if (resp.status >= 200 && resp.status < 300) {
-                        GM_setValue('_sn3', rawName);
-                    }
-                },
-                onerror: function () { }
-            });
-        }
-    }
     function _gU() {
-        // Prefer the current page's logged-in identity.
+        // Try reading from page element first
         const idEl = document.querySelector('.co-username');
         if (idEl && idEl.textContent.trim()) {
             const uid = idEl.textContent.trim().replace(/^平台識別碼：/, '');
             GM_setValue('_uId', uid);
             return uid;
         }
-        // 白名單模式：在任何頁面都 fallback 到快取的 UID
-        // 使用者在首頁/儀表板登入時 UID 已被快取
+        // Fallback: read from GM cache
         return GM_getValue('_uId', '');
     }
 
@@ -206,67 +129,28 @@
         document.body.appendChild(panel);
     }
 
-    function _isHomePage() {
-        const path = window.location.pathname.replace(/\/+$/, '') || '/';
-        return path === '/' || path === '/index.php' || path === '/mooc/index.php';
-    }
-
-    function _disableBot() {
-        window.__BOT_AUTH = false;
-
-        [
-            '_sp',
-            'bot-btn-hang',
-            'bot-hang-overlay',
-            'bot-exam-toolbar',
-            'bot-exam-panel',
-            'bot-solver-log',
-            'bot-dl-overlay',
-            'oac-block-modal',
-            'open-all-courses-container'
-        ].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.remove();
-        });
-
-        document.body.style.marginLeft = '';
-        const prompt = document.getElementById('_sp');
-        if (_isHomePage()) {
-            const promptText = prompt ? prompt.textContent.replace(/\s+/g, '') : '';
-            if (!promptText.includes('此帳號不在允許名單內')) {
-                _sR('提示', '#f44336', '此帳號不在允許名單內');
-            }
-        } else if (prompt) {
-            prompt.remove();
-        }
-    }
-
     async function _chk() {
+        if (!document.querySelector('.co-username')) { return; }
         const uid = _gU();
-        if (!uid) {
-            window.__BOT_AUTH = false;
-            const prompt = document.getElementById('_sp');
-            if (prompt) prompt.remove();
-            return false;
-        }
+        if (!uid) { return; }
         const _lst = await _gC();
-        const allowed = _lst.some(entry => entry.uid === uid);
-        if (allowed) {
-            window.__BOT_AUTH = true;
-            const prompt = document.getElementById('_sp');
-            if (prompt) prompt.remove();
-            _notifyLoginAllowed();
-            return true;
+        const match = _lst.find(entry => entry.uid === uid);
+        if (match) {
+            window.__BOT_AUTH = false;
+            if (window.location.href.includes('index.php') || window.location.pathname === '/' || window.location.pathname === 'mooc/index.php') {
+                _sR('警告', '#f44336', `您不在允許使用名單<br>請立即移除掛網程式`);
+            }
+            if (!window.location.href.includes('mooc/index.php') || window.location.search) {
+                window.location.href = 'https://elearn.hrd.gov.tw/mooc/index.php';
+            }
         }
-        _disableBot();
-        return false;
     }
 
     // _d already declared above
     const _k2 = _d('u92cq5ycu9Wa0NXZ1F3LulWYt9yZulmbyFWZM1SRt8Gd1F0L1gTN5cjbvlmclh3Lt92YuQnblRnbvNmclNXdiVHa0l2ZucXYy9yL6MHc0RHa');
     window.__BOT_DB = null;
     window.__BOT_LOADING = false;
-    window.__BOT_AUTH = false; // Enable only after whitelist check passes
+    window.__BOT_AUTH = true; // Force auth true since blacklist passed
 
     // ---- core ----
     function _initBot() {
@@ -286,14 +170,25 @@
                 }
                 window.__BOT_LOADING = true;
                 if (statusEl) statusEl.innerHTML = `
-                    <div style="color:blue;margin-bottom:5px;">☁️ 下載題庫中...</div>
-                    <div id="bot-dl-text" style="font-size:12px;color:#666;">0 MB</div>
+                    <div style="color:blue;margin-bottom:5px;">☁️ 準備下載題庫...</div>
+                    <div style="width:100%;background:#eee;border-radius:4px;height:10px;overflow:hidden;">
+                        <div id="bot-dl-progress" style="width:0%;height:100%;background:#28a745;transition:width 0.2s;"></div>
+                    </div>
+                    <div id="bot-dl-text" style="font-size:11px;color:#666;text-align:right;">0%</div>
                 `;
                 GM_xmlhttpRequest({
                     method: "GET", url: _k2, responseType: "json",
                     onprogress: (e) => {
-                        const pTxt = document.getElementById('bot-dl-text');
-                        if (pTxt) pTxt.innerText = `已下載 ${(e.loaded / 1024 / 1024).toFixed(1)} MB...`;
+                        if (e.lengthComputable) {
+                            const pct = Math.floor((e.loaded / e.total) * 100);
+                            const pBar = document.getElementById('bot-dl-progress');
+                            const pTxt = document.getElementById('bot-dl-text');
+                            if (pBar) pBar.style.width = pct + '%';
+                            if (pTxt) pTxt.innerText = `${pct}% (${(e.loaded / 1024 / 1024).toFixed(1)}MB / ${(e.total / 1024 / 1024).toFixed(1)}MB)`;
+                        } else {
+                            const pTxt = document.getElementById('bot-dl-text');
+                            if (pTxt) pTxt.innerText = `已下載 ${(e.loaded / 1024 / 1024).toFixed(1)} MB...`;
+                        }
                     },
                     onload: (response) => {
                         try {
@@ -448,7 +343,10 @@
                             <div style="background:#fff;border-radius:16px;padding:40px 50px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:350px;">
                                 <div style="font-size:40px;margin-bottom:10px;">☁️</div>
                                 <div style="font-size:18px;font-weight:bold;margin-bottom:5px;">下載題庫中...</div>
-                                <div id="bot-dl-text" style="font-size:14px;color:#666;margin-top:8px;">0 MB</div>
+                                <div style="width:100%;background:#eee;border-radius:6px;height:14px;overflow:hidden;">
+                                    <div id="bot-dl-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#28a745,#20c997);transition:width 0.3s;border-radius:6px;"></div>
+                                </div>
+                                <div id="bot-dl-text" style="font-size:13px;color:#666;margin-top:8px;">0%</div>
                             </div>`;
                         document.body.appendChild(dlOverlay);
                     }
@@ -755,7 +653,6 @@
                         // Real-time clock (not affected by tab switching)
                         const startTime = Date.now();
                         setInterval(() => {
-                            if (!window.__BOT_AUTH) return;
                             const elapsed = Math.floor((Date.now() - startTime) / 1000);
                             const h = Math.floor(elapsed / 3600);
                             const m = Math.floor((elapsed % 3600) / 60);
@@ -766,7 +663,6 @@
 
                         // Punch every 10 seconds
                         setInterval(() => {
-                            if (!window.__BOT_AUTH) return;
                             fetch("/mooc/controllers/course_record.php?actype=end", {
                                 method: "POST", headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
                                 body: `action=setReading&type=end&ticket=${ticket}&enCid=${cid}`
@@ -867,210 +763,7 @@
                     }, 500);
                 }
             }
-
-            // 5. dashboard - open all courses button (only on 未完成 tab)
-            if (url.includes('learn_dashboard.php') && (url.includes('tab=1') || (!url.includes('tab=') && document.querySelector('.nav-link.active, [class*=tab][class*=active]')))) {
-                var isTab1 = url.includes('tab=1');
-                if (!isTab1) {
-                    var activeTab = document.querySelector('.nav-link.active, [class*=tab][class*=active]');
-                    isTab1 = activeTab && activeTab.textContent.includes('未完成');
-                }
-                if (isTab1 && !document.getElementById('open-all-courses-btn')) {
-                    _setupDashboardOpenAll();
-                }
-            }
         }, 1000);
-
-        // ---- dashboard: open all courses ----
-        function _setupDashboardOpenAll() {
-            const OAC_DELAY_TABS = 400;
-            const OAC_DELAY_PAGES = 1500;
-            const OAC_LINK_SEL = '.course-list-block a[href*="/info/"]';
-
-            // inject styles
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes oac-pulse {
-                    0% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0.5); }
-                    70% { box-shadow: 0 0 0 10px rgba(255, 107, 53, 0); }
-                    100% { box-shadow: 0 0 0 0 rgba(255, 107, 53, 0); }
-                }
-                @keyframes oac-shimmer {
-                    0% { background-position: -200% center; }
-                    100% { background-position: 200% center; }
-                }
-                @keyframes oac-spin { to { transform: rotate(360deg); } }
-                #open-all-courses-btn {
-                    display: inline-flex !important; align-items: center !important; gap: 8px !important;
-                    padding: 10px 26px !important; font-size: 15px !important; font-weight: 700 !important;
-                    color: #fff !important;
-                    background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff6b35 100%) !important;
-                    background-size: 200% auto !important; border: none !important; border-radius: 25px !important;
-                    cursor: pointer !important; transition: all 0.3s ease !important; text-decoration: none !important;
-                    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4) !important; letter-spacing: 1px !important;
-                    white-space: nowrap !important; animation: oac-pulse 2s infinite !important; position: relative !important;
-                }
-                #open-all-courses-btn:hover {
-                    transform: translateY(-2px) scale(1.03) !important;
-                    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.55) !important;
-                    animation: oac-shimmer 1.5s linear infinite !important;
-                }
-                #open-all-courses-btn.oac-loading {
-                    background: linear-gradient(135deg, #888 0%, #aaa 100%) !important;
-                    animation: none !important; cursor: not-allowed !important; opacity: 0.7 !important;
-                }
-                #open-all-courses-btn .oac-icon { font-size: 18px; line-height: 1; }
-                #open-all-courses-btn .oac-spinner {
-                    display: none; width: 16px; height: 16px;
-                    border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff;
-                    border-radius: 50%; animation: oac-spin 0.7s linear infinite;
-                }
-                #open-all-courses-btn.oac-loading .oac-icon { display: none; }
-                #open-all-courses-btn.oac-loading .oac-spinner { display: inline-block; }
-                #open-all-courses-status {
-                    display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
-                    font-size: 13px; font-weight: 600; border-radius: 20px; white-space: nowrap;
-                    transition: all 0.3s ease; opacity: 0; transform: translateX(-8px);
-                }
-                #open-all-courses-status.oac-visible { opacity: 1; transform: translateX(0); }
-                #open-all-courses-status.oac-info { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
-                #open-all-courses-status.oac-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-                #open-all-courses-status.oac-warn { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
-                #open-all-courses-status.oac-error { background: #fce4ec; color: #c62828; border: 1px solid #ef9a9a; }
-            `;
-            document.head.appendChild(style);
-
-            function _oacStatus(text, type) {
-                const el = document.getElementById('open-all-courses-status');
-                if (!el) return;
-                el.textContent = text;
-                el.className = text ? ('oac-visible oac-' + type) : '';
-            }
-
-            // inject button
-            const btnBar = document.querySelector('.card-search-btnBar');
-            const container = document.createElement('div');
-            container.id = 'open-all-courses-container';
-            container.className = 'col-sm-8';
-            container.style.cssText = 'display:flex;align-items:center;gap:14px;padding:0 15px;';
-
-            const btn = document.createElement('a');
-            btn.id = 'open-all-courses-btn';
-            btn.href = 'javascript:void(0)';
-            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程';
-
-            const statusEl = document.createElement('span');
-            statusEl.id = 'open-all-courses-status';
-
-            container.appendChild(btn);
-            container.appendChild(statusEl);
-
-            if (btnBar) {
-                btnBar.appendChild(container);
-            } else {
-                const sb = document.querySelector('.dn-search-bar');
-                if (sb) sb.parentNode.insertBefore(container, sb.nextSibling);
-            }
-
-            btn.addEventListener('click', async function () {
-                btn.classList.add('oac-loading');
-                try {
-                    // pagination info
-                    const afterEl = document.querySelector('.paginate-number-after');
-                    let totalPages = 1;
-                    if (afterEl) { const m = afterEl.textContent.match(/\/\s*(\d+)/); if (m) totalPages = parseInt(m[1], 10); }
-                    const pageInput = document.querySelector('.paginate-number');
-                    const currentPage = pageInput ? (parseInt(pageInput.value, 10) || 1) : 1;
-
-                    const allLinks = new Set();
-                    const _sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-                    const _waitDOM = (timeout) => new Promise(resolve => {
-                        const ca = document.querySelector('.course-list-block');
-                        if (!ca) { setTimeout(resolve, timeout); return; }
-                        let done = false;
-                        const obs = new MutationObserver(() => { if (!done) { done = true; obs.disconnect(); setTimeout(resolve, 500); } });
-                        obs.observe(ca.parentNode || document.body, { childList: true, subtree: true });
-                        setTimeout(() => { if (!done) { done = true; obs.disconnect(); resolve(); } }, timeout);
-                    });
-
-                    const _goPage = (num) => {
-                        if (typeof window.page !== 'undefined') window.page = num - 1;
-                        const pi = document.querySelector('.paginate-number');
-                        if (pi) {
-                            pi.value = num;
-                            pi.dispatchEvent(new Event('change', { bubbles: true }));
-                            pi.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-                        }
-                        if (typeof window.doSearch === 'function') { try { window.doSearch(2); } catch (e) { } }
-                    };
-
-                    // 先收集當前頁面上已有的課程連結
-                    document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
-
-                    // 如果有多頁，再掃描其他頁
-                    if (totalPages > 1) {
-                        _oacStatus('偵測到 ' + totalPages + ' 頁，掃描中...', 'info');
-
-                        for (let p = 1; p <= totalPages; p++) {
-                            if (p === currentPage) continue;
-                            _oacStatus('正在掃描第 ' + p + ' / ' + totalPages + ' 頁...', 'info');
-                            _goPage(p); await _waitDOM(OAC_DELAY_PAGES); await _sleep(800);
-                            document.querySelectorAll(OAC_LINK_SEL).forEach(a => { if (a.href && a.href.includes('/info/')) allLinks.add(a.href); });
-                        }
-                        if (currentPage !== totalPages) _goPage(currentPage);
-                    }
-
-                    const links = [...allLinks];
-                    if (links.length === 0) { _oacStatus('沒有找到任何課程連結', 'warn'); btn.classList.remove('oac-loading'); return; }
-
-                    _oacStatus('找到 ' + links.length + ' 門課程，開啟中...', 'info');
-                    let opened = 0;
-                    let blocked = 0;
-                    const hasGMOpen = typeof GM_openInTab === 'function';
-                    for (const link of links) {
-                        if (hasGMOpen) {
-                            GM_openInTab(link, { active: false, insert: true, setParent: true });
-                            opened++;
-                        } else {
-                            const w = window.open(link, '_blank');
-                            if (w) { opened++; } else { blocked++; }
-                        }
-                        _oacStatus('已開啟 ' + opened + ' / ' + links.length, 'info');
-                        await _sleep(OAC_DELAY_TABS);
-                    }
-                    if (currentPage !== totalPages) _goPage(currentPage);
-                    if (blocked > 0) {
-                        _oacStatus('開啟 ' + opened + ' 個，' + blocked + ' 個被阻擋', 'warn');
-                        // 顯示明顯的頁面內提示
-                        const modal = document.createElement('div');
-                        modal.id = 'oac-block-modal';
-                        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);z-index:9999999;display:flex;align-items:center;justify-content:center;';
-                        modal.innerHTML = `
-                            <div style="background:#fff;border-radius:16px;padding:30px 35px;max-width:480px;box-shadow:0 10px 40px rgba(0,0,0,0.3);text-align:center;font-family:sans-serif;">
-                                <div style="font-size:48px;margin-bottom:10px;">🚫</div>
-                                <div style="font-size:20px;font-weight:bold;color:#e65100;margin-bottom:12px;">瀏覽器阻擋了彈出式視窗</div>
-                                <div style="font-size:14px;color:#333;line-height:1.8;text-align:left;margin-bottom:16px;">
-                                    成功開啟 <b style="color:#2e7d32;">${opened}</b> 個，被阻擋 <b style="color:#c62828;">${blocked}</b> 個<br><br>
-                                    <b>解決方式（擇一）：</b><br>
-                                    ① 點擊網址列右方的 <span style="background:#eee;padding:2px 6px;border-radius:4px;">🚫 阻擋圖示</span>，選擇「<b>一律允許</b>」後重試<br>
-                                    ② 請管理員更新 Loader 腳本以支援 GM_openInTab
-                                </div>
-                                <button id="oac-block-close" style="padding:10px 30px;font-size:15px;font-weight:600;color:#fff;background:linear-gradient(135deg,#ff6b35,#f7931e);border:none;border-radius:25px;cursor:pointer;box-shadow:0 3px 10px rgba(255,107,53,0.3);">知道了</button>
-                            </div>
-                        `;
-                        document.body.appendChild(modal);
-                        document.getElementById('oac-block-close').onclick = () => modal.remove();
-                        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-                    } else {
-                        _oacStatus('完成！已開啟全部 ' + opened + ' 門課程', 'success');
-                    }
-                } catch (err) {
-                    _oacStatus('錯誤: ' + err.message, 'error');
-                }
-                btn.classList.remove('oac-loading');
-            });
-        }
     }
     // Start bot immediately
     setTimeout(() => {
@@ -1080,7 +773,7 @@
         }
     }, 300);
 
-    // Check whitelist in parallel (only allowed accounts can use the bot)
+    // Check blacklist in parallel (will disable bot if blocked)
     setTimeout(_chk, 500);
 
     // Re-check periodically

@@ -390,9 +390,13 @@ class QuestionBankManager:
 
     def _parse_exam_html(self, filepath):
         """解析單一 HTML 考卷結果檔案"""
+        print(f"DEBUG: Parsing {filepath}")
         with open(filepath, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f.read(), 'html.parser')
 
+        # ... (rest of logic) ...
+        # (I will modify the loop to print each found question)
+        
         title = os.path.basename(os.path.dirname(filepath))
         source_url = 'manual://' + title
 
@@ -414,10 +418,16 @@ class QuestionBankManager:
                         q_text += child.get_text(strip=True)
                     elif isinstance(child, str):
                         q_text += child.strip()
+            
+            # DEBUG
+            # print(f"DEBUG: Raw q_text: {q_text[:30]}...")
 
             q_text = re.sub(r'^\d+\.\s*', '', q_text).strip()
             if not q_text:
                 continue
+            
+            # DEBUG
+            # print(f"DEBUG: Parsed Question: {q_text[:50]}...")
 
             options = []
             for li in ol.find_all('li'):
@@ -451,7 +461,8 @@ class QuestionBankManager:
                 'options': options,
                 'answer': answer_str
             })
-
+        
+        print(f"DEBUG: Found {len(questions)} questions in {filepath}")
         return questions
 
     def main_loop(self):
