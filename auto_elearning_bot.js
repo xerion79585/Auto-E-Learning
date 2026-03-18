@@ -720,7 +720,7 @@
 
             const btn = document.createElement('button');
             btn.id = 'bot-btn-cert';
-            btn.innerHTML = '一鍵<br><span style="font-size:11px;">下載</span><br><span style="font-size:11px;">證書</span>';
+            btn.innerHTML = '下載<br>證書';
             Object.assign(btn.style, {
                 width: '60px',
                 height: '70px',
@@ -1058,7 +1058,7 @@
             const btn = document.createElement('a');
             btn.id = 'open-all-courses-btn';
             btn.href = 'javascript:void(0)';
-            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程';
+            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程(記憶體不足多開會崩潰)';
 
             const statusEl = document.createElement('span');
             statusEl.id = 'open-all-courses-status';
