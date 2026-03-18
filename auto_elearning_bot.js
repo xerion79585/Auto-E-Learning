@@ -1058,7 +1058,7 @@
             const btn = document.createElement('a');
             btn.id = 'open-all-courses-btn';
             btn.href = 'javascript:void(0)';
-            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程(記憶體不足多開會崩潰)';
+            btn.innerHTML = '<span class="oac-icon">⚡</span><span class="oac-spinner"></span>快速開啟所有課程(分頁數量太多記憶體不足時會崩潰)';
 
             const statusEl = document.createElement('span');
             statusEl.id = 'open-all-courses-status';
