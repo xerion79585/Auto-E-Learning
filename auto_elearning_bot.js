@@ -1423,7 +1423,8 @@
                     return;
                 }
 
-                await flashCenterNotice('作答完成，準備自動送出考卷', { type: 'success', duration: 1200 });
+                await flashCenterNotice('作答完成，即將送出考卷', { type: 'success', duration: 1200 });
+                await flashCenterNotice('視窗即將自動關閉', { type: 'success', duration: 1000 });
                 if (AUTO_SUBMIT_DELAY_MS > 0) {
                     await sleep(AUTO_SUBMIT_DELAY_MS);
                 }
