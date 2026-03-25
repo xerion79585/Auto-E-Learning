@@ -258,6 +258,166 @@
         const TRUE_VALS = ['○', 'o', 'v', '是', 'true', 'correct', '對', '圈', 'right', '正確', 't'];
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
         const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
+        const AUTO_SUBMIT_DELAY_MS = 800;
+        const QUESTIONNAIRE_SUBMIT_DELAY_MS = 500;
+        const QUESTIONNAIRE_CLOSE_GRACE_MS = 2500;
+        const QUESTIONNAIRE_AUTO_RUN = true;
+        const DIALOG_BYPASS_MS = 10000;
+        const QUESTIONNAIRE_DIALOG_BYPASS_MS = 45000;
+        const DIALOG_SWEEP_INTERVAL_MS = 300;
+        const AUTO_CLOSE_DELAY_MS = 1500;
+        const AUTO_CLOSE_MARKER_TTL_MS = 120000;
+        const PAGE_WINDOW = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+        const CENTER_NOTICE_ID = 'bot-center-notice';
+        const CENTER_PROGRESS_FILL_ID = 'bot-center-progress-fill';
+        const CENTER_DOWNLOAD_TEXT_ID = 'bot-center-download-text';
+        const RUNTIME_STYLE_ID = 'bot-runtime-style';
+        const DIALOG_BYPASS_KEY = '__BOT_DIALOG_BYPASS_UNTIL__';
+        const DIALOG_BYPASS_STORAGE_KEY = '__BOT_DIALOG_BYPASS_UNTIL_TS__';
+        const PAGE_DIALOG_BRIDGE_ID = 'bot-page-dialog-bridge';
+        const AUTO_CLOSE_MARKER_KEY = '__BOT_PENDING_CLOSE__';
+        const AUTO_CLOSE_ATTEMPTED_KEY = '__BOT_CLOSE_ATTEMPTED__';
+        const QUESTIONNAIRE_STATE_KEY = '__BOT_QUESTIONNAIRE_STATE__';
+        const QUESTIONNAIRE_AUTO_RUN_KEY = '__BOT_QUESTIONNAIRE_AUTO_RUN_DONE__';
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        function logBot(message) {
+            console.log(`[BOT] ${message}`);
+        }
+
+        function ensureRuntimeStyles() {
+            if (document.getElementById(RUNTIME_STYLE_ID)) return;
+
+            const style = document.createElement('style');
+            style.id = RUNTIME_STYLE_ID;
+            style.textContent = `
+                @keyframes bot-download-sweep {
+                    0% { transform: translateX(-140%); }
+                    100% { transform: translateX(320%); }
+                }
+            `;
+            (document.head || document.documentElement).appendChild(style);
+        }
+
+        function formatBytes(bytes) {
+            const safeBytes = Number.isFinite(bytes) && bytes > 0 ? bytes : 0;
+            if (safeBytes < 1024) return `${safeBytes.toFixed(0)} B`;
+            if (safeBytes < 1024 * 1024) return `${(safeBytes / 1024).toFixed(1)} KB`;
+            if (safeBytes < 1024 * 1024 * 1024) return `${(safeBytes / 1024 / 1024).toFixed(1)} MB`;
+            return `${(safeBytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+        }
+
+        function getCenterNoticeStyles(type) {
+            if (type === 'success') {
+                return {
+                    background: 'rgba(5, 122, 76, 0.94)',
+                    border: '2px solid rgba(167, 243, 208, 0.9)'
+                };
+            }
+            if (type === 'warn') {
+                return {
+                    background: 'rgba(180, 83, 9, 0.95)',
+                    border: '2px solid rgba(253, 230, 138, 0.9)'
+                };
+            }
+            return {
+                background: 'rgba(15, 23, 42, 0.92)',
+                border: '2px solid rgba(147, 197, 253, 0.75)'
+            };
+        }
+
+        function getCenterNoticeElement() {
+            ensureRuntimeStyles();
+
+            let element = document.getElementById(CENTER_NOTICE_ID);
+            if (element) return element;
+
+            element = document.createElement('div');
+            element.id = CENTER_NOTICE_ID;
+            Object.assign(element.style, {
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%) scale(0.96)',
+                zIndex: '10000000',
+                minWidth: '280px',
+                maxWidth: '70vw',
+                padding: '18px 28px',
+                borderRadius: '16px',
+                background: 'rgba(15, 23, 42, 0.92)',
+                color: '#fff',
+                fontSize: '18px',
+                fontWeight: '700',
+                fontFamily: 'sans-serif',
+                textAlign: 'center',
+                boxShadow: '0 14px 40px rgba(0,0,0,0.35)',
+                opacity: '0',
+                pointerEvents: 'none',
+                transition: 'opacity 0.2s ease, transform 0.2s ease'
+            });
+            document.body.appendChild(element);
+            return element;
+        }
+
+        function showCenterNotice(message, options) {
+            const settings = Object.assign({ type: 'info' }, options || {});
+            const element = getCenterNoticeElement();
+            const styles = getCenterNoticeStyles(settings.type);
+
+            element.textContent = message;
+            element.style.background = styles.background;
+            element.style.border = styles.border;
+            element.style.opacity = '1';
+            element.style.transform = 'translate(-50%, -50%) scale(1)';
+        }
+
+        function hideCenterNotice(immediate) {
+            const element = document.getElementById(CENTER_NOTICE_ID);
+            if (!element) return Promise.resolve();
+
+            if (immediate) {
+                element.style.opacity = '0';
+                element.style.transform = 'translate(-50%, -50%) scale(0.96)';
+                return Promise.resolve();
+            }
+
+            return new Promise((resolve) => {
+                element.style.opacity = '0';
+                element.style.transform = 'translate(-50%, -50%) scale(0.96)';
+                setTimeout(resolve, 220);
+            });
+        }
+
+        async function flashCenterNotice(message, options) {
+            const settings = Object.assign({ duration: 1200, type: 'info' }, options || {});
+            showCenterNotice(message, settings);
+            await sleep(settings.duration);
+            await hideCenterNotice(false);
+        }
+
+        function showCenterDownloadNotice() {
+            const element = getCenterNoticeElement();
+            const styles = getCenterNoticeStyles('info');
+
+            element.style.background = styles.background;
+            element.style.border = styles.border;
+            element.style.opacity = '1';
+            element.style.transform = 'translate(-50%, -50%) scale(1)';
+            element.innerHTML = `
+                <div style="font-size:20px;font-weight:700;margin-bottom:14px;">題庫下載中...</div>
+                <div style="position:relative;width:100%;height:14px;background:rgba(255,255,255,0.14);border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.25);">
+                    <div id="${CENTER_PROGRESS_FILL_ID}" style="position:absolute;top:0;left:0;width:34%;height:100%;background:linear-gradient(90deg, rgba(96,165,250,0.15) 0%, #60a5fa 30%, #38bdf8 70%, rgba(34,211,238,0.15) 100%);border-radius:999px;box-shadow:0 0 14px rgba(56,189,248,0.35);transform:translateX(-140%);animation:bot-download-sweep 1.15s ease-in-out infinite;"></div>
+                </div>
+                <div id="${CENTER_DOWNLOAD_TEXT_ID}" style="margin-top:10px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.92);">準備下載...</div>
+            `;
+        }
+
+        function updateCenterDownloadProgress(event) {
+            const textNode = document.getElementById(CENTER_DOWNLOAD_TEXT_ID);
+            if (!textNode) return;
+            const loaded = event && typeof event.loaded === 'number' ? event.loaded : 0;
+            textNode.innerText = loaded > 0 ? `已下載 ${formatBytes(loaded)}` : '正在取得題庫...';
+        }
 
         function loadDatabase(statusEl) {
             return new Promise((resolve) => {
@@ -277,7 +437,10 @@
                     method: "GET", url: _k2, responseType: "json",
                     onprogress: (e) => {
                         const pTxt = document.getElementById('bot-dl-text');
-                        if (pTxt) pTxt.innerText = `已下載 ${(e.loaded / 1024 / 1024).toFixed(1)} MB...`;
+                        if (pTxt && e && typeof e.loaded === 'number') {
+                            pTxt.innerText = `已下載 ${formatBytes(e.loaded)}...`;
+                        }
+                        updateCenterDownloadProgress(e);
                     },
                     onload: (response) => {
                         try {
@@ -305,6 +468,676 @@
             div.id = id; div.innerHTML = html;
             document.body.appendChild(div);
             return div;
+        }
+
+        function buildDbIndex(db) {
+            const dbIndex = {};
+            db.forEach((item) => {
+                const key = normalize(item.question);
+                if (key && !dbIndex[key]) {
+                    dbIndex[key] = item;
+                }
+            });
+            return dbIndex;
+        }
+
+        function getStoredDialogBypassUntil() {
+            try {
+                return Number(sessionStorage.getItem(DIALOG_BYPASS_STORAGE_KEY) || '0');
+            } catch (error) {
+                console.log('[BOT] Failed to read dialog bypass storage:', error);
+                return 0;
+            }
+        }
+
+        function setStoredDialogBypassUntil(until) {
+            try {
+                sessionStorage.setItem(DIALOG_BYPASS_STORAGE_KEY, String(until));
+            } catch (error) {
+                console.log('[BOT] Failed to persist dialog bypass storage:', error);
+            }
+        }
+
+        function isDialogBypassActive() {
+            const localUntil = Number(window[DIALOG_BYPASS_KEY] || 0);
+            const pageUntil = Number(PAGE_WINDOW && PAGE_WINDOW[DIALOG_BYPASS_KEY] || 0);
+            const storedUntil = getStoredDialogBypassUntil();
+            return Date.now() < Math.max(localUntil, pageUntil, storedUntil);
+        }
+
+        function injectPageDialogBypassBridge() {
+            if (window.__BOT_DIALOG_BRIDGE_INJECTED__) return;
+
+            const root = document.documentElement || document.head || document.body;
+            if (!root || document.getElementById(PAGE_DIALOG_BRIDGE_ID)) return;
+            window.__BOT_DIALOG_BRIDGE_INJECTED__ = true;
+
+            const script = document.createElement('script');
+            script.id = PAGE_DIALOG_BRIDGE_ID;
+            script.textContent = `
+                (function () {
+                    try {
+                        if (window.__BOT_PAGE_DIALOG_BRIDGE__) return;
+                        window.__BOT_PAGE_DIALOG_BRIDGE__ = true;
+
+                        const STORAGE_KEY = ${JSON.stringify(DIALOG_BYPASS_STORAGE_KEY)};
+                        const PROP_KEY = ${JSON.stringify(DIALOG_BYPASS_KEY)};
+
+                        function getUntil() {
+                            let stored = 0;
+                            let prop = 0;
+                            try { stored = Number(sessionStorage.getItem(STORAGE_KEY) || '0'); } catch (error) {}
+                            try { prop = Number(window[PROP_KEY] || 0); } catch (error) {}
+                            return Math.max(stored, prop);
+                        }
+
+                        function isActive() {
+                            return Date.now() < getUntil();
+                        }
+
+                        function patch(name, factory) {
+                            const originalKey = '__BOT_PAGE_ORIGINAL_' + name + '__';
+                            if (typeof window[name] !== 'function' || window[originalKey]) return;
+                            const original = window[name];
+                            window[originalKey] = original;
+                            window[name] = factory(original);
+                        }
+
+                        patch('alert', function (original) {
+                            return function (message) {
+                                if (isActive()) {
+                                    console.log('[BOT/Page] Auto-dismissed alert:', message);
+                                    return;
+                                }
+                                return original.call(this, message);
+                            };
+                        });
+
+                        patch('confirm', function (original) {
+                            return function (message) {
+                                if (isActive()) {
+                                    console.log('[BOT/Page] Auto-confirmed:', message);
+                                    return true;
+                                }
+                                return original.call(this, message);
+                            };
+                        });
+
+                        patch('prompt', function (original) {
+                            return function (message, defaultValue) {
+                                if (isActive()) {
+                                    console.log('[BOT/Page] Auto-dismissed prompt:', message);
+                                    return defaultValue || '';
+                                }
+                                return original.call(this, message, defaultValue);
+                            };
+                        });
+                    } catch (error) {
+                        console.log('[BOT/Page] Bridge failed:', error);
+                    }
+                })();
+            `;
+
+            root.appendChild(script);
+            script.remove();
+        }
+
+        function getActionText(element) {
+            return ((element.innerText || element.textContent || element.value || element.getAttribute('aria-label') || element.title || '') + '')
+                .replace(/\s+/g, '')
+                .trim();
+        }
+
+        function isVisibleElement(element) {
+            if (!element || !element.isConnected) return false;
+            const style = window.getComputedStyle(element);
+            if (!style || style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+                return false;
+            }
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        }
+
+        function autoHandleBlockingDialog() {
+            if (!document.body || !isDialogBypassActive()) return false;
+
+            const modalSelector = [
+                '[role="dialog"]',
+                '.ui-dialog',
+                '.modal',
+                '.modal-dialog',
+                '.dialog',
+                '.swal-modal',
+                '.swal2-popup',
+                '.sweet-alert',
+                '.jconfirm',
+                '.jconfirm-box',
+                '.layui-layer',
+                '.bootbox',
+                '.el-message-box',
+                '.ant-modal',
+                '.ant-modal-root',
+                '.x-window',
+                '.window',
+                '.messager-window'
+            ].join(', ');
+
+            const actionSelector = [
+                'button',
+                'input[type="button"]',
+                'input[type="submit"]',
+                'a[role="button"]',
+                '[role="button"]',
+                '.ui-button',
+                '.swal-button',
+                '.swal2-confirm',
+                '.swal2-close',
+                '.layui-layer-btn a',
+                '.bootbox-accept'
+            ].join(', ');
+
+            const dialogRoots = Array.from(document.querySelectorAll(modalSelector)).filter(isVisibleElement);
+            const prioritizedButtons = [];
+
+            dialogRoots.forEach((root) => {
+                const buttons = Array.from(root.querySelectorAll(actionSelector)).filter((element) => {
+                    if (!isVisibleElement(element)) return false;
+                    if (element.disabled) return false;
+                    return Boolean(getActionText(element));
+                });
+
+                if (buttons.length === 0) return;
+
+                const rootText = ((root.innerText || root.textContent || '') + '').replace(/\s+/g, '');
+                const primary = buttons.find((element) => /^(確定|確認|關閉|完成|好|ok|yes)$/i.test(getActionText(element)));
+                if (primary) {
+                    prioritizedButtons.push(primary);
+                    return;
+                }
+
+                if (buttons.length === 1 && /(更新完畢|完成|成功|提示|訊息|message|notice|已送出)/i.test(rootText)) {
+                    prioritizedButtons.push(buttons[0]);
+                }
+            });
+
+            if (prioritizedButtons.length === 0) {
+                const looseButtons = Array.from(document.querySelectorAll(actionSelector)).filter((element) => {
+                    if (!isVisibleElement(element)) return false;
+                    if (element.disabled) return false;
+                    return /^(確定|確認|關閉|完成|好|ok|yes)$/i.test(getActionText(element));
+                });
+
+                if (looseButtons.length > 0) {
+                    prioritizedButtons.push(looseButtons[0]);
+                }
+            }
+
+            const target = prioritizedButtons[0];
+            if (!target) return false;
+
+            logBot(`🤖 自動點擊彈窗按鈕: ${getActionText(target)}`);
+            target.click();
+            return true;
+        }
+
+        function patchDialogMethod(target, methodName, handlerFactory) {
+            const originalKey = `__BOT_ORIGINAL_${methodName}__`;
+            if (!target || typeof target[methodName] !== 'function') return;
+            if (target[originalKey]) return;
+
+            const original = target[methodName];
+            target[originalKey] = original;
+            target[methodName] = handlerFactory(original, target);
+        }
+
+        function armDialogBypassOnTarget(target, until) {
+            try {
+                if (!target) return;
+
+                target[DIALOG_BYPASS_KEY] = Math.max(target[DIALOG_BYPASS_KEY] || 0, until);
+
+                patchDialogMethod(target, 'confirm', (original, owner) => function (message) {
+                    if (Date.now() < (owner[DIALOG_BYPASS_KEY] || 0)) {
+                        console.log('[BOT] Auto-confirmed:', message);
+                        return true;
+                    }
+                    return original.call(this, message);
+                });
+
+                patchDialogMethod(target, 'alert', (original, owner) => function (message) {
+                    if (Date.now() < (owner[DIALOG_BYPASS_KEY] || 0)) {
+                        console.log('[BOT] Auto-dismissed alert:', message);
+                        return;
+                    }
+                    return original.call(this, message);
+                });
+
+                patchDialogMethod(target, 'prompt', (original, owner) => function (message, defaultValue) {
+                    if (Date.now() < (owner[DIALOG_BYPASS_KEY] || 0)) {
+                        console.log('[BOT] Auto-dismissed prompt:', message);
+                        return defaultValue || '';
+                    }
+                    return original.call(this, message, defaultValue);
+                });
+            } catch (error) {
+                console.log('[BOT] Failed to patch dialog target:', error);
+            }
+        }
+
+        function installDialogBypass(durationMs) {
+            const until = Date.now() + durationMs;
+            setStoredDialogBypassUntil(until);
+            injectPageDialogBypassBridge();
+
+            const targets = [window, PAGE_WINDOW];
+            try {
+                if (PAGE_WINDOW.parent && PAGE_WINDOW.parent !== PAGE_WINDOW) {
+                    targets.push(PAGE_WINDOW.parent);
+                }
+            } catch (error) {
+                console.log('[BOT] parent patch skipped:', error);
+            }
+
+            try {
+                if (PAGE_WINDOW.top && PAGE_WINDOW.top !== PAGE_WINDOW) {
+                    targets.push(PAGE_WINDOW.top);
+                }
+            } catch (error) {
+                console.log('[BOT] top patch skipped:', error);
+            }
+
+            targets.forEach((target) => armDialogBypassOnTarget(target, until));
+        }
+
+        function setPendingAutoCloseMarker(kind) {
+            try {
+                sessionStorage.setItem(AUTO_CLOSE_MARKER_KEY, JSON.stringify({
+                    at: Date.now(),
+                    href: document.URL,
+                    kind: kind || 'exam'
+                }));
+            } catch (error) {
+                console.log('[BOT] Failed to set close marker:', error);
+            }
+        }
+
+        function getPendingAutoCloseMarker() {
+            try {
+                const raw = sessionStorage.getItem(AUTO_CLOSE_MARKER_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+                console.log('[BOT] Failed to parse close marker:', error);
+                return null;
+            }
+        }
+
+        function clearPendingAutoCloseMarker() {
+            try {
+                sessionStorage.removeItem(AUTO_CLOSE_MARKER_KEY);
+            } catch (error) {
+                console.log('[BOT] Failed to clear close marker:', error);
+            }
+        }
+
+        function isLikelyPostSubmitResultPage() {
+            const url = document.URL.toLowerCase();
+            if (url.includes('exam_start.php')) return false;
+            if (url.includes('questionnaire')) return false;
+            if (/(view_result|exam_result|result|score)/.test(url)) return true;
+
+            const bodyText = ((document.body && document.body.innerText) || '').replace(/\s+/g, '');
+            return /(測驗結果|測驗成績|成績結果|成績|分數|總分|及格|不及格|答對|答錯)/.test(bodyText);
+        }
+
+        function shouldAutoCloseCurrentPage() {
+            const marker = getPendingAutoCloseMarker();
+            if (!marker || !marker.at) return false;
+
+            const age = Date.now() - marker.at;
+            if (age < 0 || age > AUTO_CLOSE_MARKER_TTL_MS) {
+                clearPendingAutoCloseMarker();
+                return false;
+            }
+
+            if (marker.kind === 'questionnaire') {
+                return age >= QUESTIONNAIRE_CLOSE_GRACE_MS;
+            }
+
+            return isLikelyPostSubmitResultPage();
+        }
+
+        function getQuestionnaireState() {
+            return window[QUESTIONNAIRE_STATE_KEY] || 'idle';
+        }
+
+        function setQuestionnaireState(state) {
+            window[QUESTIONNAIRE_STATE_KEY] = state;
+        }
+
+        async function closeCurrentPageBestEffort() {
+            if (window[AUTO_CLOSE_ATTEMPTED_KEY]) return;
+            window[AUTO_CLOSE_ATTEMPTED_KEY] = true;
+
+            const marker = getPendingAutoCloseMarker();
+            const closeKind = marker && marker.kind ? marker.kind : 'exam';
+            clearPendingAutoCloseMarker();
+            setQuestionnaireState('idle');
+
+            logBot(`🪟 偵測到送出後頁面，${AUTO_CLOSE_DELAY_MS}ms 後嘗試自動關閉`);
+
+            if (closeKind === 'questionnaire') {
+                await flashCenterNotice('問卷填寫完成，視窗即將關閉', { type: 'success', duration: 1100 });
+            }
+
+            const closeDelay = closeKind === 'questionnaire' ? 80 : AUTO_CLOSE_DELAY_MS;
+
+            setTimeout(() => {
+                const targets = [PAGE_WINDOW, window];
+
+                targets.forEach((target) => {
+                    try {
+                        if (target && typeof target.open === 'function') {
+                            target.open('', '_self');
+                        }
+                    } catch (error) {
+                        console.log('[BOT] open("", "_self") skipped:', error);
+                    }
+                });
+
+                targets.forEach((target) => {
+                    try {
+                        if (target && typeof target.close === 'function') {
+                            target.close();
+                        }
+                    } catch (error) {
+                        console.log('[BOT] close() skipped:', error);
+                    }
+                });
+
+                setTimeout(() => {
+                    if (!document.hidden) {
+                        const fallbackMessage = closeKind === 'questionnaire'
+                            ? '問卷已送出，請手動關閉此視窗'
+                            : '考卷已送出，請手動關閉此視窗';
+                        showCenterNotice(fallbackMessage, { type: 'warn' });
+                    }
+                }, 1200);
+            }, closeDelay);
+        }
+
+        function bootstrapPendingDialogBypass() {
+            injectPageDialogBypassBridge();
+
+            const marker = getPendingAutoCloseMarker();
+            if (!marker) return;
+
+            if (marker.kind === 'questionnaire') {
+                installDialogBypass(QUESTIONNAIRE_DIALOG_BYPASS_MS);
+                return;
+            }
+
+            installDialogBypass(DIALOG_BYPASS_MS);
+        }
+
+        function findSubmitControl() {
+            const selectorCandidates = [
+                'input[type="submit"]',
+                'button[type="submit"]',
+                'input[value="送出"]',
+                'input[value*="送出"]',
+                'input[value*="提交"]',
+                'input[value*="交卷"]',
+                'button[value*="送出"]',
+                'button[value*="提交"]',
+                'button[value*="交卷"]'
+            ];
+
+            for (const selector of selectorCandidates) {
+                const found = document.querySelector(selector);
+                if (found) return found;
+            }
+
+            const controls = Array.from(document.querySelectorAll('button, input[type="button"], input[type="submit"], a'));
+            return controls.find((element) => /(送出|提交|完成|交卷|submit)/i.test(((element.innerText || element.textContent || element.value || '') + '').trim())) || null;
+        }
+
+        function appendSubmitControlValue(formData, submitControl) {
+            if (!submitControl) return;
+            const name = submitControl.getAttribute('name');
+            if (!name) return;
+            const value = (submitControl.value || submitControl.innerText || submitControl.textContent || '送出').trim();
+            formData.append(name, value);
+        }
+
+        async function submitQuestionnaireByFetch(form, submitControl) {
+            if (!window.fetch || !form) return false;
+
+            const action = new URL(form.getAttribute('action') || form.action || window.location.href, window.location.href);
+            const method = ((form.getAttribute('method') || form.method || 'POST') + '').toUpperCase();
+            const formData = new FormData(form);
+            appendSubmitControlValue(formData, submitControl);
+
+            if (method === 'GET') {
+                for (const [key, value] of formData.entries()) {
+                    action.searchParams.append(key, value);
+                }
+
+                const response = await fetch(action.toString(), {
+                    method: 'GET',
+                    credentials: 'include',
+                    redirect: 'follow'
+                });
+                await response.text();
+                return response.ok;
+            }
+
+            const body = new URLSearchParams();
+            for (const [key, value] of formData.entries()) {
+                body.append(key, value);
+            }
+
+            const response = await fetch(action.toString(), {
+                method: method,
+                credentials: 'include',
+                redirect: 'follow',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                body: body.toString()
+            });
+            await response.text();
+            return response.ok;
+        }
+
+        function submitQuestionnaireByIframe(form, submitControl) {
+            return new Promise((resolve) => {
+                if (!form) {
+                    resolve(false);
+                    return;
+                }
+
+                const frameName = `bot-questionnaire-submit-frame-${Date.now()}`;
+                const frame = document.createElement('iframe');
+                frame.name = frameName;
+                frame.id = frameName;
+                frame.setAttribute('sandbox', 'allow-forms');
+                frame.style.display = 'none';
+
+                const originalTarget = form.getAttribute('target');
+                const hiddenInputs = [];
+                let armed = false;
+                let done = false;
+
+                const cleanup = (success) => {
+                    if (done) return;
+                    done = true;
+                    frame.remove();
+                    hiddenInputs.forEach((input) => input.remove());
+                    if (originalTarget !== null) {
+                        form.setAttribute('target', originalTarget);
+                    } else {
+                        form.removeAttribute('target');
+                    }
+                    resolve(success);
+                };
+
+                if (submitControl) {
+                    const name = submitControl.getAttribute('name');
+                    if (name) {
+                        const hidden = document.createElement('input');
+                        hidden.type = 'hidden';
+                        hidden.name = name;
+                        hidden.value = (submitControl.value || submitControl.innerText || submitControl.textContent || '送出').trim();
+                        form.appendChild(hidden);
+                        hiddenInputs.push(hidden);
+                    }
+                }
+
+                frame.onload = () => {
+                    if (!armed) return;
+                    cleanup(true);
+                };
+
+                document.body.appendChild(frame);
+                form.setAttribute('target', frameName);
+
+                setTimeout(() => {
+                    armed = true;
+                    try {
+                        form.submit();
+                    } catch (error) {
+                        cleanup(false);
+                    }
+                }, 60);
+
+                setTimeout(() => cleanup(true), 8000);
+            });
+        }
+
+        async function submitQuestionnaireSilently() {
+            if (window.__BOT_QUESTIONNAIRE_SUBMITTING__) {
+                return true;
+            }
+
+            const submitControl = findSubmitControl();
+            const form = (submitControl && submitControl.form) || document.querySelector('form');
+            if (!form) {
+                return false;
+            }
+
+            window.__BOT_QUESTIONNAIRE_SUBMITTING__ = true;
+
+            try {
+                try {
+                    const ok = await submitQuestionnaireByFetch(form, submitControl);
+                    if (ok) return true;
+                } catch (error) {
+                    console.log('[BOT] fetch questionnaire submit failed:', error);
+                }
+
+                return await submitQuestionnaireByIframe(form, submitControl);
+            } finally {
+                if (!document.hidden) {
+                    window.__BOT_QUESTIONNAIRE_SUBMITTING__ = false;
+                }
+            }
+        }
+
+        function groupInputsByName(nodeList) {
+            const groups = {};
+            nodeList.forEach((input) => {
+                const key = input.name || `__noname_${Object.keys(groups).length}`;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(input);
+            });
+            return groups;
+        }
+
+        function isQuestionnairePage() {
+            return document.URL.includes('questionnaire');
+        }
+
+        function isExamPage() {
+            return document.URL.includes('exam_start.php') && !document.URL.includes('questionnaire');
+        }
+
+        function initExamToolbar() {
+            if (!isExamPage()) return;
+            if (document.getElementById('bot-exam-toolbar')) return;
+
+            const toolbar = document.createElement('div');
+            toolbar.id = 'bot-exam-toolbar';
+            Object.assign(toolbar.style, {
+                position: 'fixed',
+                top: '50%',
+                left: '0',
+                transform: 'translateY(-50%)',
+                zIndex: '9999999',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '10px',
+                background: 'rgba(0,0,0,0.85)',
+                borderRadius: '0 12px 12px 0',
+                boxShadow: '2px 0 15px rgba(0,0,0,0.3)'
+            });
+
+            const btnSolve = document.createElement('button');
+            btnSolve.id = 'bot-btn-solve';
+            btnSolve.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>';
+            Object.assign(btnSolve.style, {
+                width: '60px',
+                height: '70px',
+                border: 'none',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                background: 'linear-gradient(135deg, #6610f2 0%, #6f42c1 100%)',
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: '18px',
+                transition: 'transform 0.2s',
+                lineHeight: '1.2'
+            });
+            btnSolve.onmouseover = () => btnSolve.style.transform = 'scale(1.08)';
+            btnSolve.onmouseout = () => btnSolve.style.transform = 'scale(1)';
+            btnSolve.onclick = oneClickSolve;
+
+            const btnSearch = document.createElement('button');
+            btnSearch.id = 'bot-btn-manual';
+            btnSearch.innerHTML = '🔍<br><span style="font-size:11px;">手動</span><br><span style="font-size:11px;">搜尋</span>';
+            Object.assign(btnSearch.style, {
+                width: '60px',
+                height: '70px',
+                border: 'none',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                background: 'linear-gradient(135deg, #24292e 0%, #444d56 100%)',
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: '18px',
+                transition: 'transform 0.2s',
+                lineHeight: '1.2'
+            });
+            btnSearch.onmouseover = () => btnSearch.style.transform = 'scale(1.08)';
+            btnSearch.onmouseout = () => btnSearch.style.transform = 'scale(1)';
+            btnSearch.onclick = () => {
+                const panel = document.getElementById('bot-exam-panel');
+                if (panel) {
+                    const isVisible = panel.style.display !== 'none';
+                    panel.style.display = isVisible ? 'none' : 'block';
+                    document.body.style.marginLeft = isVisible ? '0' : '510px';
+                    btnSearch.style.background = isVisible
+                        ? 'linear-gradient(135deg, #24292e 0%, #444d56 100%)'
+                        : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+                } else {
+                    setupSearchPanel();
+                    btnSearch.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
+                }
+            };
+
+            toolbar.appendChild(btnSolve);
+            toolbar.appendChild(btnSearch);
+            document.body.appendChild(toolbar);
         }
 
         // ---- page question parser ----
@@ -389,71 +1222,141 @@
             return false;
         }
 
+        function submitExam() {
+            try {
+                installDialogBypass(DIALOG_BYPASS_MS);
+                logBot(`🤖 已啟用 ${DIALOG_BYPASS_MS}ms 考卷對話框自動處理`);
+
+                const submitControl = findSubmitControl();
+                if (submitControl) {
+                    const label = (submitControl.innerText || submitControl.textContent || submitControl.value || submitControl.tagName).trim();
+                    setPendingAutoCloseMarker('exam');
+                    logBot(`📝 自動送出考卷: ${label}`);
+                    submitControl.click();
+                    return true;
+                }
+
+                const form = document.querySelector('form');
+                if (form) {
+                    setPendingAutoCloseMarker('exam');
+                    logBot('📝 找不到考卷送出按鈕，改用 form.submit() 送出');
+                    form.submit();
+                    return true;
+                }
+
+                logBot('⚠️ 找不到考卷送出按鈕或表單，請手動檢查');
+                return false;
+            } catch (error) {
+                logBot(`❌ 自動送出考卷失敗: ${error.message}`);
+                return false;
+            }
+        }
+
+        async function submitQuestionnaire() {
+            try {
+                installDialogBypass(QUESTIONNAIRE_DIALOG_BYPASS_MS);
+                setPendingAutoCloseMarker('questionnaire');
+                logBot(`🤖 已啟用 ${QUESTIONNAIRE_DIALOG_BYPASS_MS}ms 問卷對話框自動處理`);
+
+                logBot('📝 以背景模式送出問卷...');
+                const submitted = await submitQuestionnaireSilently();
+                if (!submitted) {
+                    logBot('⚠️ 找不到問卷送出按鈕或表單，無法自動送出');
+                    setQuestionnaireState('idle');
+                    clearPendingAutoCloseMarker();
+                    return;
+                }
+
+                setQuestionnaireState('submitted');
+                await closeCurrentPageBestEffort();
+            } catch (error) {
+                logBot(`❌ 問卷自動送出失敗: ${error.message}`);
+                setQuestionnaireState('idle');
+                clearPendingAutoCloseMarker();
+            }
+        }
+
+        function runQuestionnaireAutoFill(source) {
+            if (!isQuestionnairePage()) return;
+            if (getQuestionnaireState() !== 'idle') return;
+
+            const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
+            const checks = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+            if (radios.length === 0 && checks.length === 0) {
+                logBot('⚠️ 問卷頁沒有可填寫的欄位');
+                return;
+            }
+
+            const alreadyAnswered = radios.some((radio) => radio.checked);
+            if (alreadyAnswered) {
+                logBot('ℹ️ 問卷已有作答內容，略過自動填寫');
+                setQuestionnaireState('skipped');
+                return;
+            }
+
+            setQuestionnaireState('filling');
+            installDialogBypass(QUESTIONNAIRE_DIALOG_BYPASS_MS);
+            logBot(source === 'auto' ? '📝 偵測到問卷頁，自動開始填寫' : '📝 開始自動填寫問卷');
+
+            const radioGroups = groupInputsByName(radios);
+            Object.keys(radioGroups).forEach((key) => {
+                const group = radioGroups[key];
+                const target = group.find((radio) => radio.value === 'C') || group[2] || group[group.length - 1];
+                if (target && !target.checked) {
+                    target.click();
+                }
+            });
+
+            const checkGroups = groupInputsByName(checks);
+            Object.keys(checkGroups).forEach((key) => {
+                checkGroups[key].slice(0, 3).forEach((checkbox) => {
+                    if (!checkbox.checked) {
+                        checkbox.click();
+                    }
+                });
+            });
+
+            logBot(`⏳ ${QUESTIONNAIRE_SUBMIT_DELAY_MS}ms 後自動送出問卷...`);
+            setTimeout(() => {
+                submitQuestionnaire();
+            }, QUESTIONNAIRE_SUBMIT_DELAY_MS);
+        }
+
         // ---- one-click solver ----
         async function oneClickSolve() {
             const btn = document.getElementById('bot-btn-solve');
-            if (btn) { btn.disabled = true; btn.innerText = '⏳ ...'; }
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳<br><span style="font-size:11px;">處理</span><br><span style="font-size:11px;">中</span>';
+            }
 
-            const logArea = document.getElementById('bot-solver-log') || (() => {
-                const d = document.createElement('div');
-                d.id = 'bot-solver-log';
-                Object.assign(d.style, {
-                    position: 'fixed', bottom: '10px', right: '10px', width: '400px', maxHeight: '350px',
-                    overflowY: 'auto', background: 'rgba(0,0,0,0.95)', color: '#eee', fontSize: '11px',
-                    padding: '12px', borderRadius: '8px', zIndex: '999999', fontFamily: 'Consolas, monospace',
-                    border: '1px solid #555', whiteSpace: 'pre-wrap'
-                });
-                document.body.appendChild(d);
-                return d;
-            })();
+            const oldLogArea = document.getElementById('bot-solver-log');
+            if (oldLogArea) {
+                oldLogArea.remove();
+            }
 
-            const log = (msg) => {
-                const p = document.createElement('div');
-                p.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                logArea.prepend(p);
-            };
-
-            log('🚀 開始作答...');
+            logBot('🚀 開始作答...');
 
             try {
-                if (!window.__BOT_DB) {
-                    log('☁️ 下載題庫中...');
-                    // Show full-screen progress overlay
-                    let dlOverlay = document.getElementById('bot-dl-overlay');
-                    if (!dlOverlay) {
-                        dlOverlay = document.createElement('div');
-                        dlOverlay.id = 'bot-dl-overlay';
-                        Object.assign(dlOverlay.style, {
-                            position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
-                            background: 'rgba(0,0,0,0.7)', zIndex: '9999999',
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-                        });
-                        dlOverlay.innerHTML = `
-                            <div style="background:#fff;border-radius:16px;padding:40px 50px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:350px;">
-                                <div style="font-size:40px;margin-bottom:10px;">☁️</div>
-                                <div style="font-size:18px;font-weight:bold;margin-bottom:5px;">下載題庫中...</div>
-                                <div id="bot-dl-text" style="font-size:14px;color:#666;margin-top:8px;">0 MB</div>
-                            </div>`;
-                        document.body.appendChild(dlOverlay);
-                    }
-                    const db = await loadDatabase(null);
-                    if (dlOverlay) dlOverlay.remove();
-                    if (!db) { log('❌ 題庫下載失敗'); return; }
-                    log(`✅ 載入 ${window.__BOT_DB.length} 題`);
+                const hadCachedDb = Boolean(window.__BOT_DB);
+                if (!hadCachedDb) {
+                    showCenterDownloadNotice();
                 }
+                const db = await loadDatabase(null);
+                if (!db) throw new Error('題庫下載失敗');
+                if (!hadCachedDb) {
+                    await flashCenterNotice('題庫下載完成', { type: 'success', duration: 1000 });
+                }
+                logBot(`✅ 載入 ${db.length} 題`);
 
-                const dbIndex = {};
-                window.__BOT_DB.forEach(item => {
-                    const qKey = normalize(item.question);
-                    if (qKey && !dbIndex[qKey]) dbIndex[qKey] = item;
-                });
-                log(`📚 索引 ${Object.keys(dbIndex).length} 條`);
+                const dbIndex = buildDbIndex(db);
+                logBot(`📚 索引 ${Object.keys(dbIndex).length} 條`);
 
                 const pageQs = getPageQuestions();
-                log(`📄 偵測到 ${pageQs.length} 題`);
+                logBot(`📄 偵測到 ${pageQs.length} 題`);
 
                 if (pageQs.length === 0) {
-                    log('⚠️ 未偵測到題目！');
+                    logBot('⚠️ 未偵測到題目，停止送出');
                     alert('未偵測到任何題目，請確認考試頁面已完全載入。');
                     return;
                 }
@@ -473,18 +1376,22 @@
 
                     if (!dbItem) {
                         qObj.element.style.background = '#f8d7da';
-                        log(`❌ Q${i + 1}: 題庫無此題 - ${qObj.text.substring(0, 20)}...`);
+                        logBot(`❌ Q${i + 1}: 題庫無此題 - ${qObj.text.substring(0, 20)}...`);
                         continue;
                     }
 
                     const correctOpts = (dbItem.options || []).filter(o => o.correct).map(o => o.text);
+                    const expectedCorrectKeys = new Set(correctOpts.map((text) => normalize(text)).filter(Boolean));
+                    const matchedCorrectKeys = new Set();
                     let hit = false;
 
                     for (const pageOpt of qObj.options) {
                         let shouldSelect = false;
                         for (const ct of correctOpts) {
                             if (isTFMatch(pageOpt.label, ct) || isTextMatch(pageOpt.label, ct) || isTFMatch(pageOpt.input.value, ct)) {
-                                shouldSelect = true; break;
+                                shouldSelect = true;
+                                matchedCorrectKeys.add(normalize(ct));
+                                break;
                             }
                         }
                         if (shouldSelect) {
@@ -493,23 +1400,44 @@
                         }
                     }
 
-                    if (hit) {
+                    const fullyMatched = hit && expectedCorrectKeys.size > 0 && matchedCorrectKeys.size === expectedCorrectKeys.size;
+
+                    if (fullyMatched) {
                         filled++;
                         qObj.element.style.background = '#d1e7dd';
                     } else {
                         qObj.element.style.background = '#fff3cd';
-                        log(`⚠️ Q${i + 1}: 選項不符 DB:[${correctOpts.join('|')}] Page:[${qObj.options.map(o => o.label).join('|')}]`);
+                        if (expectedCorrectKeys.size === 0) {
+                            logBot(`⚠️ Q${i + 1}: 題庫有題目但沒有可用答案資料`);
+                        } else {
+                            logBot(`⚠️ Q${i + 1}: 選項不符 DB:[${correctOpts.join('|')}] Page:[${qObj.options.map(o => o.label).join('|')}]`);
+                        }
                     }
                 }
 
-                log(`🎉 完成！填寫 ${filled}/${pageQs.length}`);
-                alert(`完成！共填寫 ${filled}/${pageQs.length} 題\n請人工檢查後再送出！`);
+                logBot(`🎉 完成！完整填寫 ${filled}/${pageQs.length}`);
 
+                if (filled !== pageQs.length) {
+                    logBot(`⚠️ 尚有 ${pageQs.length - filled} 題未完整匹配，已取消自動送出`);
+                    await flashCenterNotice(`尚有 ${pageQs.length - filled} 題未匹配，已取消自動送出`, { type: 'warn', duration: 1500 });
+                    return;
+                }
+
+                await flashCenterNotice('作答完成，準備自動送出考卷', { type: 'success', duration: 1200 });
+                if (AUTO_SUBMIT_DELAY_MS > 0) {
+                    await sleep(AUTO_SUBMIT_DELAY_MS);
+                }
+                submitExam();
             } catch (e) {
-                log(`Error: ${e.message}`);
+                logBot(`❌ ${e.message}`);
+                await hideCenterNotice(true);
                 alert('Error: ' + e.message);
             } finally {
-                if (btn) { btn.disabled = false; btn.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>'; }
+                await hideCenterNotice(true);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>';
+                }
             }
         }
 
@@ -805,8 +1733,31 @@
 
 
         // ---- main loop ----
-        setInterval(() => {
+        function mainLoop() {
+            injectPageDialogBypassBridge();
+
+            if (!document.body) {
+                return;
+            }
+
+            const marker = getPendingAutoCloseMarker();
+
+            if (!isQuestionnairePage()) {
+                if (!marker && getQuestionnaireState() !== 'idle') {
+                    setQuestionnaireState('idle');
+                }
+                window[QUESTIONNAIRE_AUTO_RUN_KEY] = false;
+            }
+
+            if (shouldAutoCloseCurrentPage()) {
+                closeCurrentPageBestEffort();
+                return;
+            }
+
+            autoHandleBlockingDialog();
+
             if (!window.__BOT_AUTH) return;
+
             const url = window.location.href;
 
             // 1. path tree - left toolbar with hang button (OLD STYLE)
@@ -846,7 +1797,6 @@
                             </div>
                         `);
 
-                        // Real-time clock (not affected by tab switching)
                         const startTime = Date.now();
                         setInterval(() => {
                             if (!window.__BOT_AUTH) return;
@@ -858,16 +1808,15 @@
                             if (d) d.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
                         }, 1000);
 
-                        // Punch every 10 seconds
                         setInterval(() => {
                             if (!window.__BOT_AUTH) return;
                             fetch("/mooc/controllers/course_record.php?actype=end", {
-                                method: "POST", headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
+                                method: "POST",
+                                headers: { "content-type": "application/x-www-form-urlencoded; charset=UTF-8" },
                                 body: `action=setReading&type=end&ticket=${ticket}&enCid=${cid}`
                             });
                         }, 10000);
 
-                        // Stop button - use replace to prevent back-button returning to expired ticket
                         document.getElementById('bot-btn-stop-hang').onclick = () => {
                             window.location.replace('/mooc/user/learn_dashboard.php?tab=1');
                         };
@@ -876,90 +1825,14 @@
             }
 
             // 3. exam page
-            if (url.includes('exam_start.php') && !url.includes('questionnaire')) {
-                if (!document.getElementById('bot-exam-toolbar')) {
-                    const toolbar = document.createElement('div');
-                    toolbar.id = 'bot-exam-toolbar';
-                    Object.assign(toolbar.style, {
-                        position: 'fixed', top: '50%', left: '0', transform: 'translateY(-50%)',
-                        zIndex: '9999999', display: 'flex', flexDirection: 'column', gap: '8px',
-                        padding: '10px', background: 'rgba(0,0,0,0.85)', borderRadius: '0 12px 12px 0',
-                        boxShadow: '2px 0 15px rgba(0,0,0,0.3)'
-                    });
-
-                    const btnSolve = document.createElement('button');
-                    btnSolve.id = 'bot-btn-solve';
-                    btnSolve.innerHTML = '⚡<br><span style="font-size:11px;">一鍵</span><br><span style="font-size:11px;">作答</span>';
-                    Object.assign(btnSolve.style, {
-                        width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
-                        background: 'linear-gradient(135deg, #6610f2 0%, #6f42c1 100%)',
-                        color: '#fff', fontWeight: 'bold', fontSize: '18px',
-                        transition: 'transform 0.2s', lineHeight: '1.2'
-                    });
-                    btnSolve.onmouseover = () => btnSolve.style.transform = 'scale(1.08)';
-                    btnSolve.onmouseout = () => btnSolve.style.transform = 'scale(1)';
-                    btnSolve.onclick = oneClickSolve;
-
-                    const btnSearch = document.createElement('button');
-                    btnSearch.id = 'bot-btn-manual';
-                    btnSearch.innerHTML = '🔍<br><span style="font-size:11px;">手動</span><br><span style="font-size:11px;">搜尋</span>';
-                    Object.assign(btnSearch.style, {
-                        width: '60px', height: '70px', border: 'none', borderRadius: '10px', cursor: 'pointer',
-                        background: 'linear-gradient(135deg, #24292e 0%, #444d56 100%)',
-                        color: '#fff', fontWeight: 'bold', fontSize: '18px',
-                        transition: 'transform 0.2s', lineHeight: '1.2'
-                    });
-                    btnSearch.onmouseover = () => btnSearch.style.transform = 'scale(1.08)';
-                    btnSearch.onmouseout = () => btnSearch.style.transform = 'scale(1)';
-                    btnSearch.onclick = () => {
-                        const panel = document.getElementById('bot-exam-panel');
-                        if (panel) {
-                            const isVisible = panel.style.display !== 'none';
-                            panel.style.display = isVisible ? 'none' : 'block';
-                            document.body.style.marginLeft = isVisible ? '0' : '510px';
-                            btnSearch.style.background = isVisible
-                                ? 'linear-gradient(135deg, #24292e 0%, #444d56 100%)'
-                                : 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-                        } else {
-                            setupSearchPanel();
-                            btnSearch.style.background = 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)';
-                        }
-                    };
-
-                    toolbar.appendChild(btnSolve);
-                    toolbar.appendChild(btnSearch);
-                    document.body.appendChild(toolbar);
-                }
-            }
+            initExamToolbar();
 
             // 4. questionnaire
-            if (url.includes('questionnaire')) {
-                if (!window.__bot_q_filled && document.querySelector('input[type="radio"]')) {
-                    window.__bot_q_filled = true;
-
-                    const radios = document.querySelectorAll('input[type="radio"]');
-                    const alreadyAnswered = Array.from(radios).some(r => r.checked);
-                    if (alreadyAnswered) return;
-
-                    window.alert = () => { }; window.confirm = () => true;
-                    const groups = {};
-                    radios.forEach(r => { if (!groups[r.name]) groups[r.name] = []; groups[r.name].push(r); });
-                    for (let k in groups) {
-                        const g = groups[k];
-                        let t = g.find(r => r.value === 'C') || g[2] || g[g.length - 1];
-                        if (t && !t.checked) t.click();
-                    }
-                    const checks = document.querySelectorAll('input[type="checkbox"]');
-                    const cgroups = {};
-                    checks.forEach(c => { if (!cgroups[c.name]) cgroups[c.name] = []; cgroups[c.name].push(c); });
-                    for (let k in cgroups) {
-                        cgroups[k].slice(0, 3).forEach(c => { if (!c.checked) c.click(); });
-                    }
-                    setTimeout(() => {
-                        const btn = document.querySelector('input[type="submit"], button[type="submit"], input[value="送出"]');
-                        if (btn) btn.click();
-                    }, 500);
-                }
+            if (QUESTIONNAIRE_AUTO_RUN && isQuestionnairePage() && !window[QUESTIONNAIRE_AUTO_RUN_KEY] && getQuestionnaireState() === 'idle') {
+                window[QUESTIONNAIRE_AUTO_RUN_KEY] = true;
+                setTimeout(() => {
+                    runQuestionnaireAutoFill('auto');
+                }, 300);
             }
 
             // 5. dashboard - open all courses button (only on 未完成 tab)
@@ -980,7 +1853,7 @@
                     _setupCertificateDownloadButton();
                 }
             }
-        }, 1000);
+        }
 
         // ---- dashboard: open all courses ----
         function _setupDashboardOpenAll() {
@@ -1172,6 +2045,11 @@
                 btn.classList.remove('oac-loading');
             });
         }
+
+        bootstrapPendingDialogBypass();
+        mainLoop();
+        setInterval(mainLoop, 1000);
+        setInterval(autoHandleBlockingDialog, DIALOG_SWEEP_INTERVAL_MS);
     }
     // Start bot immediately
     setTimeout(() => {
