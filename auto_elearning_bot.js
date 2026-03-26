@@ -257,11 +257,7 @@
         // ... (insert full _initBot content here) ...
         const TRUE_VALS = ['○', 'o', 'v', '是', 'true', 'correct', '對', '圈', 'right', '正確', 't'];
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
-        const normalize = (s) => ((s || '') + '')
-            .toLowerCase()
-            .replace(/&nbsp;/gi, ' ')
-            .replace(/[\u200b-\u200d\ufeff]/g, '')
-            .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, '');
+        const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
         const AUTO_SUBMIT_DELAY_MS = 800;
         const QUESTIONNAIRE_SUBMIT_DELAY_MS = 500;
         const QUESTIONNAIRE_CLOSE_GRACE_MS = 2500;
@@ -287,88 +283,6 @@
 
         function logBot(message) {
             console.log(`[BOT] ${message}`);
-        }
-
-        function cleanInlineText(value) {
-            return ((value || '') + '')
-                .replace(/&nbsp;/gi, ' ')
-                .replace(/[\u200b-\u200d\ufeff]/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        function stripQuestionPrefix(value) {
-            let text = cleanInlineText(value);
-            text = text.replace(/^[【\[]?\s*(?:單選題|複選題|是非題|問答題|題目)\s*[】\]]?\s*/i, '');
-            text = text.replace(/^[(（]?\s*\d+\s*[)）]\s*/, '');
-            text = text.replace(/^(?:第\s*)?\d+\s*(?:題|[.、:：\-－]|）|\))\s*/i, '');
-            text = text.replace(/^[Qq]\s*\d+\s*(?:[.、:：\-－]|）|\))\s*/i, '');
-            return cleanInlineText(text);
-        }
-
-        function stripOptionPrefix(value) {
-            let text = cleanInlineText(value);
-            text = text.replace(/^[A-HＡ-Ｈa-h][.、)）:：\-－]\s*/, '');
-            text = text.replace(/^[①②③④⑤⑥⑦⑧]\s*/, '');
-            text = text.replace(/^[（(]?[1-8一二三四五六七八][)）.、]\s*/, '');
-            return cleanInlineText(text);
-        }
-
-        function getQuestionVariants(value) {
-            const source = cleanInlineText(value);
-            const variants = [];
-
-            function pushVariant(candidate) {
-                const normalized = normalize(stripQuestionPrefix(candidate));
-                if (normalized && !variants.includes(normalized)) {
-                    variants.push(normalized);
-                }
-            }
-
-            if (!source) return variants;
-
-            pushVariant(source);
-            pushVariant(stripQuestionPrefix(source));
-
-            const firstLine = cleanInlineText(source.split(/\n+/).find(Boolean) || '');
-            if (firstLine) pushVariant(firstLine);
-
-            const sentenceMatch = source.match(/^(.{4,180}?[?？。])/);
-            if (sentenceMatch) pushVariant(sentenceMatch[1]);
-
-            const optionCutMatch = source.match(/^(.{4,220}?)(?=\s*(?:[A-DＡ-Ｄa-d][.、)）]\s*|[(（]?[1-4一二三四][)）.、]\s*|①|②|③|④))/);
-            if (optionCutMatch) pushVariant(optionCutMatch[1]);
-
-            return variants;
-        }
-
-        function getCommonPrefixLength(a, b) {
-            const limit = Math.min(a.length, b.length);
-            let index = 0;
-            while (index < limit && a[index] === b[index]) index += 1;
-            return index;
-        }
-
-        function scoreQuestionVariantMatch(a, b) {
-            if (!a || !b) return 0;
-            if (a === b) return 1;
-
-            const shorter = Math.min(a.length, b.length);
-            const longer = Math.max(a.length, b.length);
-
-            if (shorter >= 3 && (a.includes(b) || b.includes(a))) {
-                if (shorter <= 6) {
-                    return Math.min(0.99, 0.92 + (shorter / Math.max(longer, 1)) * 0.06);
-                }
-                return Math.min(0.99, 0.88 + (shorter / Math.max(longer, 1)) * 0.1);
-            }
-
-            const prefixLength = getCommonPrefixLength(a, b);
-            if (prefixLength >= 6) {
-                return Math.min(0.9, 0.72 + (prefixLength / Math.max(longer, 1)) * 0.18);
-            }
-
-            return 0;
         }
 
         function ensureRuntimeStyles() {
@@ -557,64 +471,14 @@
         }
 
         function buildDbIndex(db) {
-            const exactMap = new Map();
-            const entries = [];
-
+            const dbIndex = {};
             db.forEach((item) => {
-                const variants = getQuestionVariants(item.question);
-                if (variants.length === 0) return;
-
-                const entry = { item, variants };
-                entries.push(entry);
-
-                variants.forEach((variant) => {
-                    if (!exactMap.has(variant)) {
-                        exactMap.set(variant, entry);
-                    }
-                });
+                const key = normalize(item.question);
+                if (key && !dbIndex[key]) {
+                    dbIndex[key] = item;
+                }
             });
-
-            return { exactMap, entries };
-        }
-
-        function findBestDbMatch(questionText, dbIndex) {
-            const variants = getQuestionVariants(questionText);
-            if (!variants.length) return null;
-
-            for (const variant of variants) {
-                const exactEntry = dbIndex.exactMap.get(variant);
-                if (exactEntry) {
-                    return { item: exactEntry.item, score: 1, mode: 'exact' };
-                }
-            }
-
-            let bestEntry = null;
-            let bestScore = 0;
-
-            for (const entry of dbIndex.entries) {
-                let entryScore = 0;
-                for (const sourceVariant of variants) {
-                    for (const targetVariant of entry.variants) {
-                        const pairScore = scoreQuestionVariantMatch(sourceVariant, targetVariant);
-                        if (pairScore > entryScore) {
-                            entryScore = pairScore;
-                        }
-                        if (entryScore >= 0.995) break;
-                    }
-                    if (entryScore >= 0.995) break;
-                }
-
-                if (entryScore > bestScore) {
-                    bestScore = entryScore;
-                    bestEntry = entry;
-                }
-            }
-
-            if (!bestEntry || bestScore < 0.9) {
-                return null;
-            }
-
-            return { item: bestEntry.item, score: bestScore, mode: 'fuzzy' };
+            return dbIndex;
         }
 
         function getStoredDialogBypassUntil() {
@@ -1276,248 +1140,69 @@
             document.body.appendChild(toolbar);
         }
 
-        function cloneWithoutFormControls(node) {
-            const clone = node.cloneNode(true);
-            clone.querySelectorAll('script, style, input, select, textarea, button').forEach((element) => element.remove());
-            return clone;
-        }
-
-        function extractTextBeforeFirstInput(node) {
-            if (!node || !node.childNodes) return '';
-
-            const parts = [];
-            for (const child of Array.from(node.childNodes)) {
-                if (child.nodeType === 1) {
-                    const element = child;
-                    if (element.matches && element.matches('input[type="radio"], input[type="checkbox"]')) {
-                        break;
-                    }
-                    if (element.querySelector && element.querySelector('input[type="radio"], input[type="checkbox"]')) {
-                        const nested = extractTextBeforeFirstInput(element);
-                        if (nested) parts.push(nested);
-                        break;
-                    }
-                    if (/^(BR|HR)$/i.test(element.tagName)) {
-                        if (parts.length > 0) break;
-                        continue;
-                    }
-                    const elementText = cleanInlineText(element.innerText || element.textContent || '');
-                    if (elementText) parts.push(elementText);
-                    continue;
-                }
-                if (child.nodeType === 3) {
-                    const text = cleanInlineText(child.textContent || '');
-                    if (text) parts.push(text);
-                }
-            }
-
-            return stripQuestionPrefix(cleanInlineText(parts.join(' ')));
-        }
-
-        function getBinaryLabelFromNode(node) {
-            if (!node) return '';
-            const image = node.querySelector('img');
-            if (!image || !image.src) return '';
-            if (image.src.includes('right.gif')) return '○';
-            if (image.src.includes('wrong.gif')) return '╳';
-            return '';
-        }
-
-        function extractQuestionTextFromContainer(container) {
-            if (!container) return '';
-
-            const clone = cloneWithoutFormControls(container);
-            clone.querySelectorAll('ol, ul').forEach((element) => element.remove());
-
-            const text = stripQuestionPrefix(cleanInlineText(clone.innerText || clone.textContent || ''));
-            return text;
-        }
-
-        function extractOptionLabelFromInput(input) {
-            if (!input) return '';
-
-            if (input.id) {
-                const selector = typeof CSS !== 'undefined' && CSS.escape
-                    ? `label[for="${CSS.escape(input.id)}"]`
-                    : `label[for="${String(input.id).replace(/"/g, '\\"')}"]`;
-                const labelByFor = document.querySelector(selector);
-                if (labelByFor) {
-                    const clone = cloneWithoutFormControls(labelByFor);
-                    const labelText = stripOptionPrefix(cleanInlineText(clone.innerText || clone.textContent || ''));
-                    if (labelText) return labelText;
-                }
-            }
-
-            const inlineParts = [];
-            let sibling = input.nextSibling;
-            while (sibling) {
-                if (sibling.nodeType === 1) {
-                    const element = sibling;
-                    if (element.matches && element.matches('input[type="radio"], input[type="checkbox"]')) break;
-                    if (/^(BR|HR)$/i.test(element.tagName)) break;
-                    if (element.querySelector && element.querySelector('input[type="radio"], input[type="checkbox"]')) break;
-                    const binaryLabel = getBinaryLabelFromNode(element);
-                    if (binaryLabel) {
-                        inlineParts.push(binaryLabel);
-                        break;
-                    }
-                    const text = cleanInlineText(element.innerText || element.textContent || '');
-                    if (text) inlineParts.push(text);
-                } else if (sibling.nodeType === 3) {
-                    const text = cleanInlineText(sibling.textContent || '');
-                    if (text) inlineParts.push(text);
-                }
-                sibling = sibling.nextSibling;
-            }
-
-            const inlineText = stripOptionPrefix(cleanInlineText(inlineParts.join(' ')));
-            if (inlineText) return inlineText;
-
-            const containers = [
-                input.closest('label'),
-                input.closest('li'),
-                input.parentElement,
-                input.closest('td'),
-                input.closest('div')
-            ].filter(Boolean);
-
-            const seen = new Set();
-            for (const container of containers) {
-                if (seen.has(container)) continue;
-                seen.add(container);
-
-                const binaryLabel = getBinaryLabelFromNode(container);
-                if (binaryLabel) return binaryLabel;
-
-                const nestedInputCount = container.querySelectorAll('input[type="radio"], input[type="checkbox"]').length;
-                const safeSingleOptionContainer = /^(LABEL|LI)$/i.test(container.tagName || '');
-                if (nestedInputCount > 1 && !safeSingleOptionContainer) {
-                    continue;
-                }
-
-                const clone = cloneWithoutFormControls(container);
-                let text = cleanInlineText(clone.innerText || clone.textContent || '');
-                text = stripOptionPrefix(text);
-                if (text && text.length <= 120) {
-                    return text;
-                }
-            }
-
-            const valueText = cleanInlineText(input.value || input.getAttribute('value') || '');
-            if (valueText) return valueText;
-
-            return '';
-        }
-
         // ---- page question parser ----
         function getPageQuestions() {
             const questions = [];
-            const panel = document.getElementById('presentPanel') || document;
+            const panel = document.getElementById('presentPanel');
+            if (!panel) return questions;
 
             let examTable = null;
-            for (const table of panel.querySelectorAll('table')) {
-                if (table.querySelector('input[type="radio"], input[type="checkbox"]')) {
-                    examTable = table;
-                    break;
-                }
+            for (const t of panel.querySelectorAll('table.cssTable')) {
+                if (t.querySelector('input[type="radio"], input[type="checkbox"]')) { examTable = t; break; }
             }
             if (!examTable) return questions;
 
-            function appendUniqueOptions(targetQuestion, optionList) {
-                if (!targetQuestion || !Array.isArray(optionList)) return;
-                optionList.forEach((option) => {
-                    if (!option || !option.input) return;
-                    const exists = targetQuestion.options.some((existing) => existing.input === option.input);
-                    if (!exists) {
-                        targetQuestion.options.push(option);
-                    }
-                });
-            }
-
-            function sharesInputGroup(targetQuestion, optionList) {
-                if (!targetQuestion || !Array.isArray(optionList) || optionList.length === 0) return false;
-                const currentNames = new Set(targetQuestion.options.map((option) => option.input && option.input.name).filter(Boolean));
-                const nextNames = new Set(optionList.map((option) => option.input && option.input.name).filter(Boolean));
-                if (currentNames.size === 0 || nextNames.size === 0) return true;
-                return Array.from(nextNames).some((name) => currentNames.has(name));
-            }
-
-            let currentQuestion = null;
-            let pendingQuestionText = '';
             for (const row of examTable.querySelectorAll('tr')) {
-                const inputs = Array.from(row.querySelectorAll('input[type="radio"], input[type="checkbox"]'));
-                if (inputs.length === 0) {
-                    const rowCells = Array.from(row.children).filter((element) => /^(TD|TH)$/i.test(element.tagName));
-                    const standaloneCandidates = rowCells
-                        .map((cell) => extractQuestionTextFromContainer(cell))
-                        .filter((text) => text.length >= 3);
-                    if (standaloneCandidates.length > 0) {
-                        standaloneCandidates.sort((a, b) => b.length - a.length);
-                        pendingQuestionText = standaloneCandidates[0];
-                    } else {
-                        const rowText = stripQuestionPrefix(cleanInlineText(row.innerText || row.textContent || ''));
-                        if (rowText.length >= 6) {
-                            pendingQuestionText = rowText;
-                        }
-                    }
-                    continue;
-                }
+                const inputs = row.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+                if (inputs.length === 0) continue;
 
-                const cells = Array.from(row.children).filter((element) => /^(TD|TH)$/i.test(element.tagName));
-                const optionCell = cells.find((cell) => cell.querySelector('input[type="radio"], input[type="checkbox"]')) || row;
+                let questionTd = null;
+                for (const td of row.children) {
+                    if (td.tagName === 'TD' && td.querySelector('input[type="radio"], input[type="checkbox"]')) { questionTd = td; break; }
+                }
+                if (!questionTd) continue;
 
-                let qText = '';
-                const optionCellIndex = cells.indexOf(optionCell);
-                if (optionCellIndex > 0) {
-                    for (let index = optionCellIndex - 1; index >= 0; index -= 1) {
-                        const candidateText = extractQuestionTextFromContainer(cells[index]);
-                        if (candidateText.length >= 3) {
-                            qText = candidateText;
-                            break;
-                        }
-                    }
-                }
-
-                if (qText.length < 3) {
-                    qText = extractTextBeforeFirstInput(optionCell);
-                }
-                if (qText.length < 3) {
-                    qText = extractTextBeforeFirstInput(row);
-                }
-                if (qText.length < 3 && pendingQuestionText) {
-                    qText = pendingQuestionText;
-                }
+                const clone = questionTd.cloneNode(true);
+                clone.querySelectorAll('ol, ul').forEach(el => el.remove());
+                let qText = clone.innerText.trim().replace(/^\d+[\.\\s、]+\s*/, '');
+                if (qText.length < 3) continue;
 
                 const options = [];
-                const listItems = optionCell.querySelectorAll('ol > li, ul > li');
-                if (listItems.length > 0) {
-                    for (const li of listItems) {
-                        const input = li.querySelector('input[type="radio"], input[type="checkbox"]');
-                        if (!input) continue;
-                        options.push({ input, label: extractOptionLabelFromInput(input) });
-                    }
-                } else {
-                    inputs.forEach((input) => {
-                        options.push({ input, label: extractOptionLabelFromInput(input) });
-                    });
-                }
+                for (const li of questionTd.querySelectorAll('ol > li, ul > li')) {
+                    const input = li.querySelector('input[type="radio"], input[type="checkbox"]');
+                    if (!input) continue;
+                    let labelText = '';
 
-                const usableOptions = options.filter((option) => option.input);
-                if (qText.length < 3) {
-                    if (currentQuestion && sharesInputGroup(currentQuestion, usableOptions)) {
-                        appendUniqueOptions(currentQuestion, usableOptions);
+                    const img = li.querySelector('img');
+                    if (img) {
+                        if (img.src.includes('right.gif')) labelText = '○';
+                        else if (img.src.includes('wrong.gif')) labelText = '╳';
                     }
-                    continue;
-                }
 
-                pendingQuestionText = '';
-                currentQuestion = { text: qText, element: row, options: [] };
-                appendUniqueOptions(currentQuestion, usableOptions);
-                if (currentQuestion.options.length > 0) {
-                    questions.push(currentQuestion);
+                    if (!labelText) {
+                        const span = li.querySelector('span');
+                        if (span) {
+                            let next = span.nextSibling;
+                            while (next) {
+                                if (next.nodeType === 3 && next.textContent.trim()) { labelText = next.textContent.trim(); break; }
+                                if (next.nodeType === 1 && next.tagName === 'IMG') {
+                                    if (next.src.includes('right.gif')) { labelText = '○'; break; }
+                                    if (next.src.includes('wrong.gif')) { labelText = '╳'; break; }
+                                }
+                                if (next.nodeType === 1 && next.innerText && next.innerText.trim()) { labelText = next.innerText.trim(); break; }
+                                next = next.nextSibling;
+                            }
+                        }
+                        if (!labelText) {
+                            for (const node of li.childNodes) {
+                                if (node.nodeType === 3 && node.textContent.trim()) { labelText = node.textContent.trim(); break; }
+                            }
+                        }
+                    }
+                    options.push({ input, label: labelText });
                 }
+                if (options.length > 0) questions.push({ text: qText, element: row, options });
             }
-
             return questions;
         }
 
@@ -1665,7 +1350,7 @@
                 logBot(`✅ 載入 ${db.length} 題`);
 
                 const dbIndex = buildDbIndex(db);
-                logBot(`📚 索引 ${dbIndex.entries.length} 條`);
+                logBot(`📚 索引 ${Object.keys(dbIndex).length} 條`);
 
                 const pageQs = getPageQuestions();
                 logBot(`📄 偵測到 ${pageQs.length} 題`);
@@ -1680,17 +1365,19 @@
 
                 for (let i = 0; i < pageQs.length; i++) {
                     const qObj = pageQs[i];
-                    const match = findBestDbMatch(qObj.text, dbIndex);
-                    const dbItem = match ? match.item : null;
+                    const qNorm = normalize(qObj.text);
+
+                    let dbItem = dbIndex[qNorm] || null;
+                    if (!dbItem) {
+                        for (const k in dbIndex) {
+                            if (k.includes(qNorm) || qNorm.includes(k)) { dbItem = dbIndex[k]; break; }
+                        }
+                    }
 
                     if (!dbItem) {
                         qObj.element.style.background = '#f8d7da';
                         logBot(`❌ Q${i + 1}: 題庫無此題 - ${qObj.text.substring(0, 20)}...`);
                         continue;
-                    }
-
-                    if (match && match.mode !== 'exact') {
-                        logBot(`ℹ️ Q${i + 1}: 使用強化比對命中題庫 (${Math.round(match.score * 100)}%)`);
                     }
 
                     const correctOpts = (dbItem.options || []).filter(o => o.correct).map(o => o.text);
@@ -1790,24 +1477,11 @@
                             const m = url.match(/post\/(\d+)/);
                             if (m) title += ` (${m[1]})`;
                         }
-                        idx.set(url, {
-                            title,
-                            url,
-                            questions: [],
-                            fullText: title.toLowerCase(),
-                            normalizedTitle: normalize(title),
-                            normalizedFullText: normalize(title),
-                            questionVariantSet: new Set()
-                        });
+                        idx.set(url, { title, url, questions: [], fullText: title.toLowerCase() });
                     }
                     const entry = idx.get(url);
                     entry.questions.push(item);
                     entry.fullText += ' ' + (item.question || '').toLowerCase();
-                    const questionVariants = getQuestionVariants(item.question);
-                    if (questionVariants.length > 0) {
-                        entry.normalizedFullText += ' ' + questionVariants.join(' ');
-                        questionVariants.forEach((variant) => entry.questionVariantSet.add(variant));
-                    }
                 });
                 return idx;
             }
@@ -1897,50 +1571,10 @@
                 if (!qRaw) { resArea.innerHTML = ''; return; }
 
                 resArea.innerHTML = '<div style="color:blue">🔍 搜尋中...</div>';
-                const queryVariants = getQuestionVariants(qRaw);
-                const fallbackNorm = normalize(qRaw);
-                const searchTerms = queryVariants.length > 0 ? queryVariants : (fallbackNorm ? [fallbackNorm] : []);
+                const qNorm = qRaw.toLowerCase().replace(/\s+/g, '');
                 const results = [];
-
                 EXAM_INDEX.forEach(exam => {
-                    let score = 0;
-                    let mode = '';
-
-                    searchTerms.forEach((term) => {
-                        if (!term) return;
-                        if (exam.normalizedTitle.includes(term)) {
-                            score = Math.max(score, 1);
-                            mode = 'title';
-                            return;
-                        }
-                        if (exam.normalizedFullText.includes(term)) {
-                            if (score < 0.95) {
-                                score = 0.95;
-                                mode = 'question';
-                            }
-                            return;
-                        }
-                        const titleScore = scoreQuestionVariantMatch(term, exam.normalizedTitle);
-                        if (titleScore >= 0.9 && titleScore > score) {
-                            score = titleScore;
-                            mode = 'title';
-                            return;
-                        }
-                        if (exam.questionVariantSet && exam.questionVariantSet.size > 0) {
-                            for (const variant of exam.questionVariantSet) {
-                                const questionScore = scoreQuestionVariantMatch(term, variant);
-                                if (questionScore >= 0.9 && questionScore > score) {
-                                    score = questionScore;
-                                    mode = 'question';
-                                }
-                                if (score >= 0.99) break;
-                            }
-                        }
-                    });
-
-                    if (score > 0) {
-                        results.push({ exam, score, mode });
-                    }
+                    if (exam.fullText.replace(/\s+/g, '').includes(qNorm)) results.push(exam);
                 });
 
                 if (results.length === 0) {
@@ -1949,21 +1583,20 @@
                 }
 
                 results.sort((a, b) => {
-                    if (b.score !== a.score) return b.score - a.score;
-                    return a.exam.title.localeCompare(b.exam.title, 'zh-Hant');
+                    const aT = a.title.toLowerCase(), bT = b.title.toLowerCase();
+                    if (aT.includes(qNorm) && !bT.includes(qNorm)) return -1;
+                    if (!aT.includes(qNorm) && bT.includes(qNorm)) return 1;
+                    return 0;
                 });
 
-                if (results.length === 1) { renderExamQuestions(results[0].exam); return; }
+                if (results.length === 1) { renderExamQuestions(results[0]); return; }
 
                 let html = `<div style="background:#fff3cd;padding:10px;margin-bottom:10px;border-radius:5px;">
                     <b>🔍 找到 ${results.length} 個相關測驗</b><br><small>請點選以查看：</small></div>`;
-                results.forEach((result, idx) => {
-                    const exam = result.exam;
-                    const note = result.mode === 'title'
+                results.forEach((exam, idx) => {
+                    const note = exam.title.toLowerCase().replace(/\s+/g, '').includes(qNorm)
                         ? '<span style="color:green">● 標題吻合</span>'
-                        : result.score >= 0.95
-                            ? '<span style="color:#666">○ 題目吻合</span>'
-                            : '<span style="color:#92400e">≈ 模糊匹配</span>';
+                        : '<span style="color:#666">○ 內文吻合</span>';
                     html += `<div class="bot-cat-item" data-url="${exam.url}"
                         style="background:#fff;border:1px solid #ddd;border-radius:5px;padding:10px;margin-bottom:6px;cursor:pointer;">
                         <div><b>${idx + 1}. ${exam.title}</b></div>
