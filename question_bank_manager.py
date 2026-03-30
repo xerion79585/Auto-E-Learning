@@ -3,6 +3,9 @@ from bs4 import BeautifulSoup
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 import sys
 import hashlib
@@ -19,6 +22,9 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 MAX_WORKERS = 10  # 同時 10 個線程
+DEFAULT_GIT_BRANCH = "main"
+DEFAULT_GIT_REMOTE_NAME = "origin"
+DEFAULT_GIT_REMOTE_URL = "https://github.com/xerion79585/Auto-E-Learning.git"
 
 class QuestionBankManager:
     def __init__(self):
@@ -31,15 +37,15 @@ class QuestionBankManager:
         self.load_pending()
 
     def load_db(self):
-        if os.path.exists(DB_FILE):
+        db_path = self._db_path()
+        if os.path.exists(db_path):
             try:
-                with open(DB_FILE, 'r', encoding='utf-8') as f:
+                with open(db_path, 'r', encoding='utf-8') as f:
                     self.questions_db = json.load(f)
                     for q in self.questions_db:
                         if 'source_url' in q:
                             self.known_urls.add(q['source_url'])
-                        if 'question' in q:
-                            self.known_hashes.add(hash(q['question'].strip()))
+                        self._register_known_question(q)
                 print(f"📚 已載入 {len(self.questions_db)} 筆題目資料")
             except Exception as e:
                 print(f"⚠️ 讀取資料庫失敗: {e}")
@@ -49,16 +55,18 @@ class QuestionBankManager:
     def save_db(self):
         try:
             # 存檔時也要鎖，避免寫到一半被讀取
+            db_path = self._db_path()
             with self.lock:
-                with open(DB_FILE, 'w', encoding='utf-8') as f:
+                with open(db_path, 'w', encoding='utf-8') as f:
                     json.dump(self.questions_db, f, ensure_ascii=False, indent=2)
             # print(f"💾 資料庫已儲存 ({len(self.questions_db)} 筆)")
         except Exception as e:
             print(f"❌ 儲存失敗: {e}")
 
     def load_pending(self):
-        if os.path.exists(PENDING_FILE):
-            with open(PENDING_FILE, 'r', encoding='utf-8') as f:
+        pending_path = self._pending_path()
+        if os.path.exists(pending_path):
+            with open(pending_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     url = line.strip()
                     if url and url not in self.known_urls:
@@ -66,10 +74,254 @@ class QuestionBankManager:
             print(f"📋 待處理網址清單: {len(self.pending_urls)} 筆")
 
     def save_pending(self):
+        pending_path = self._pending_path()
         with self.lock:
-            with open(PENDING_FILE, 'w', encoding='utf-8') as f:
+            with open(pending_path, 'w', encoding='utf-8') as f:
                 for url in self.pending_urls:
                     f.write(f"{url}\n")
+
+    def _normalize_text(self, text):
+        return re.sub(
+            r"[\s\u3000\t\n\r\u00a0\"'.:;!?()\[\]{}<>《》「」【】、，。─]",
+            "",
+            (text or ""),
+        ).lower()
+
+    def _question_keys(self, question_item):
+        keys = set()
+        if not isinstance(question_item, dict):
+            return keys
+
+        question_key = self._normalize_text(question_item.get("question", ""))
+        if question_key:
+            keys.add("q:" + hashlib.md5(question_key.encode("utf-8")).hexdigest())
+
+        option_keys = []
+        for option in question_item.get("options", []):
+            if not isinstance(option, dict):
+                continue
+            normalized_option = self._normalize_text(option.get("text", ""))
+            if normalized_option:
+                option_keys.append(normalized_option)
+
+        raw = "|".join([question_key] + option_keys)
+        if raw.strip("|"):
+            keys.add("fp:" + hashlib.md5(raw.encode("utf-8")).hexdigest())
+
+        return keys
+
+    def _register_known_question(self, question_item):
+        self.known_hashes.update(self._question_keys(question_item))
+
+    def _normalize_imported_question(self, raw_item, default_category, source_hint):
+        if not isinstance(raw_item, dict):
+            return None
+
+        question = (raw_item.get("question") or "").strip()
+        if not question:
+            return None
+
+        category = (raw_item.get("category") or "").strip() or default_category
+        source_url = (raw_item.get("source_url") or "").strip() or source_hint
+
+        raw_options = raw_item.get("options")
+        options = []
+        if isinstance(raw_options, list):
+            for option in raw_options:
+                if isinstance(option, dict):
+                    text = (option.get("text") or "").strip()
+                    if not text:
+                        continue
+                    options.append({
+                        "text": text,
+                        "correct": bool(option.get("correct"))
+                    })
+                elif isinstance(option, str):
+                    text = option.strip()
+                    if text:
+                        options.append({
+                            "text": text,
+                            "correct": False
+                        })
+
+        answer = (raw_item.get("answer") or "").strip()
+        if options and answer:
+            answer_tokens = {
+                token.strip()
+                for token in re.split(r"[、,，;/；\n]+", answer)
+                if token.strip()
+            }
+            if answer_tokens:
+                for option in options:
+                    if option["text"] in answer_tokens:
+                        option["correct"] = True
+
+        if not answer and options:
+            correct_answers = [option["text"] for option in options if option.get("correct")]
+            answer = "、".join(correct_answers)
+
+        return {
+            "category": category,
+            "source_url": source_url,
+            "question": question,
+            "options": options,
+            "answer": answer
+        }
+
+    def _extract_import_questions_payload(self, payload):
+        if isinstance(payload, dict) and isinstance(payload.get("questions"), list):
+            return payload.get("questions")
+        if isinstance(payload, list):
+            return payload
+        return None
+
+    def _load_import_bank_file(self, import_path):
+        result = {
+            "path": import_path,
+            "name": os.path.basename(import_path),
+            "is_bank": False,
+            "error": None,
+            "reason": "",
+            "payload_count": 0,
+            "invalid_count": 0,
+            "questions": [],
+        }
+
+        try:
+            with open(import_path, 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+        except Exception as e:
+            result["error"] = f"讀取 JSON 失敗: {e}"
+            return result
+
+        payload = self._extract_import_questions_payload(payload)
+        if payload is None:
+            result["reason"] = "格式不是題目陣列，也不是包含 questions 陣列的物件"
+            return result
+
+        result["payload_count"] = len(payload)
+        source_hint = 'manualjson://' + os.path.basename(import_path)
+        default_category = os.path.splitext(os.path.basename(import_path))[0]
+
+        normalized_questions = []
+        invalid_count = 0
+        for item in payload:
+            normalized = self._normalize_imported_question(item, default_category, source_hint)
+            if normalized:
+                normalized_questions.append(normalized)
+            else:
+                invalid_count += 1
+
+        result["invalid_count"] = invalid_count
+        result["questions"] = normalized_questions
+        result["is_bank"] = len(normalized_questions) > 0
+        if not result["is_bank"]:
+            result["reason"] = "沒有可匯入的有效題目"
+
+        return result
+
+    def _simulate_import_merge(self, bank_results):
+        simulated_known_hashes = set(self.known_hashes)
+        planned_banks = []
+        total_new = 0
+        total_duplicates = 0
+
+        for bank in bank_results:
+            new_questions = []
+            duplicate_questions = []
+
+            for question in bank["questions"]:
+                q_keys = self._question_keys(question)
+                if q_keys and any(key in simulated_known_hashes for key in q_keys):
+                    duplicate_questions.append(question)
+                    continue
+
+                new_questions.append(question)
+                simulated_known_hashes.update(q_keys)
+
+            planned_bank = dict(bank)
+            planned_bank["new_questions"] = new_questions
+            planned_bank["duplicate_questions"] = duplicate_questions
+            planned_bank["new_count"] = len(new_questions)
+            planned_bank["duplicate_count"] = len(duplicate_questions)
+            planned_banks.append(planned_bank)
+            total_new += planned_bank["new_count"]
+            total_duplicates += planned_bank["duplicate_count"]
+
+        return planned_banks, total_new, total_duplicates
+
+    def _script_dir(self):
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _db_path(self):
+        return os.path.join(self._script_dir(), DB_FILE)
+
+    def _pending_path(self):
+        return os.path.join(self._script_dir(), PENDING_FILE)
+
+    def _detect_repo_root(self):
+        try:
+            proc = subprocess.run(
+                ["git", "-C", self._script_dir(), "rev-parse", "--show-toplevel"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return (proc.stdout or "").strip()
+        except Exception:
+            pass
+        return None
+
+    def _get_remote_url(self, repo_root):
+        if not repo_root:
+            return DEFAULT_GIT_REMOTE_URL
+        try:
+            proc = subprocess.run(
+                ["git", "-C", repo_root, "remote", "get-url", DEFAULT_GIT_REMOTE_NAME],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                remote_url = (proc.stdout or "").strip()
+                if remote_url:
+                    return remote_url
+        except Exception:
+            pass
+        return DEFAULT_GIT_REMOTE_URL
+
+    def _get_git_config(self, repo_root, key):
+        if not repo_root:
+            return ""
+        try:
+            proc = subprocess.run(
+                ["git", "-C", repo_root, "config", "--get", key],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if proc.returncode == 0:
+                return (proc.stdout or "").strip()
+        except Exception:
+            pass
+        return ""
+
+    def _run_and_print(self, command, cwd=None):
+        proc = subprocess.run(
+            command,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        stdout = (proc.stdout or "").strip()
+        stderr = (proc.stderr or "").strip()
+        for line in filter(None, stdout.splitlines()):
+            print(line)
+        for line in filter(None, stderr.splitlines()):
+            print(line)
+        return proc
     
     # ==========================
     # Logic
@@ -176,12 +428,11 @@ class QuestionBankManager:
                                     # 內容去重：檢查該測驗內的每一題是否已存在
                                     added_for_this_url = 0
                                     for q in q_list:
-                                        if 'question' in q:
-                                            qh = hash(q['question'].strip())
-                                            if qh not in self.known_hashes:
-                                                self.questions_db.append(q)
-                                                self.known_hashes.add(qh)
-                                                added_for_this_url += 1
+                                        q_keys = self._question_keys(q)
+                                        if q_keys and not any(key in self.known_hashes for key in q_keys):
+                                            self.questions_db.append(q)
+                                            self._register_known_question(q)
+                                            added_for_this_url += 1
                                     
                                     # 無論是否有新題目，都將 URL 標記為已處理，避免重複抓取
                                     self.known_urls.add(url)
@@ -223,24 +474,88 @@ class QuestionBankManager:
         elif auto_push:
             print("ℹ️ 無新題目，略過 GitHub 上傳。")
 
-    def push_to_github(self, count):
+    def push_to_github(self, count, commit_message=None):
         print("\n☁️ [Git] 正在上傳至 GitHub...")
-        import subprocess
+        db_path = self._db_path()
+        if not os.path.exists(db_path):
+            print(f"❌ 找不到題庫檔案: {db_path}")
+            return
+
+        message = commit_message or f"Auto Update: Added {count} new questions"
+
+        repo_root = self._detect_repo_root()
+        remote_url = self._get_remote_url(repo_root)
+        temp_root = tempfile.mkdtemp(prefix="autoelearning_push_")
+        temp_repo = os.path.join(temp_root, "repo")
+
         try:
-            subprocess.check_call(["git", "add", "questions.json"])
-            subprocess.check_call(["git", "commit", "-m", f"Auto Update: Added {count} new questions"])
-            # 使用 -u 參數確保設定上游分支 (首次 push 必須)
-            subprocess.check_call(["git", "push", "-u", "origin", "main"])
-            print("✅ GitHub 更新成功！")
-        except subprocess.CalledProcessError as e:
-            if e.returncode == 1:
-                # 可能是沒有任何變更需要 commit
+            init_proc = self._run_and_print(["git", "init", "-b", DEFAULT_GIT_BRANCH, temp_repo])
+            if init_proc.returncode != 0:
+                raise RuntimeError("無法建立臨時 Git 倉庫")
+
+            add_remote_proc = self._run_and_print(
+                ["git", "-C", temp_repo, "remote", "add", DEFAULT_GIT_REMOTE_NAME, remote_url]
+            )
+            if add_remote_proc.returncode != 0:
+                raise RuntimeError("無法設定 GitHub 遠端")
+
+            fetch_proc = self._run_and_print(
+                ["git", "-C", temp_repo, "fetch", DEFAULT_GIT_REMOTE_NAME, DEFAULT_GIT_BRANCH]
+            )
+            if fetch_proc.returncode != 0:
+                raise RuntimeError("無法取得 GitHub 最新版本")
+
+            checkout_proc = self._run_and_print(
+                ["git", "-C", temp_repo, "checkout", "-B", DEFAULT_GIT_BRANCH, "FETCH_HEAD"]
+            )
+            if checkout_proc.returncode != 0:
+                raise RuntimeError("無法切換到最新 GitHub 主分支")
+
+            git_user_name = self._get_git_config(repo_root, "user.name")
+            git_user_email = self._get_git_config(repo_root, "user.email")
+            if git_user_name:
+                self._run_and_print(["git", "-C", temp_repo, "config", "user.name", git_user_name])
+            if git_user_email:
+                self._run_and_print(["git", "-C", temp_repo, "config", "user.email", git_user_email])
+
+            shutil.copy2(db_path, os.path.join(temp_repo, DB_FILE))
+
+            diff_proc = subprocess.run(
+                ["git", "-C", temp_repo, "diff", "--quiet", "--", DB_FILE],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if diff_proc.returncode == 0:
                 print("ℹ️ 沒有變更需要上傳。")
-            else:
-                print(f"❌ 上傳失敗: {e}")
-                print("   請檢查網路或 Git 設定。")
+                return
+
+            add_proc = self._run_and_print(["git", "-C", temp_repo, "add", "--", DB_FILE])
+            if add_proc.returncode != 0:
+                raise RuntimeError("無法加入題庫檔案到 Git 暫存區")
+
+            commit_proc = self._run_and_print(
+                ["git", "-C", temp_repo, "commit", "-m", message]
+            )
+            if commit_proc.returncode != 0:
+                combined = f"{commit_proc.stdout or ''}\n{commit_proc.stderr or ''}".lower()
+                if "nothing to commit" in combined or "nothing added to commit" in combined:
+                    print("ℹ️ 沒有變更需要上傳。")
+                    return
+                raise RuntimeError("建立 Git commit 失敗")
+
+            push_proc = self._run_and_print(
+                ["git", "-C", temp_repo, "push", DEFAULT_GIT_REMOTE_NAME, DEFAULT_GIT_BRANCH]
+            )
+            if push_proc.returncode != 0:
+                raise RuntimeError("推送到 GitHub 失敗")
+
+            print("✅ GitHub 更新成功！")
         except Exception as e:
             print(f"❌ 上傳失敗: {e}")
+            print("   請檢查網路、GitHub 權限或 Git 設定。")
+        finally:
+            shutil.rmtree(temp_root, ignore_errors=True)
 
     def parse_single_page(self, url):
         try:
@@ -313,50 +628,99 @@ class QuestionBankManager:
         except Exception as e:
             return []
 
-    def import_html_exams(self):
-        """從 題庫/ 資料夾匯入 HTML 考卷結果"""
-        base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '題庫')
+    def import_question_bank_json(self):
+        """自動偵測同目錄題庫 JSON，與 questions.json 比對後合併"""
+        script_dir = self._script_dir()
+        db_path = os.path.abspath(self._db_path())
+        candidate_paths = []
+        for filename in sorted(os.listdir(script_dir)):
+            if not filename.lower().endswith('.json'):
+                continue
+            file_path = os.path.abspath(os.path.join(script_dir, filename))
+            if file_path == db_path:
+                continue
+            if os.path.isfile(file_path):
+                candidate_paths.append(file_path)
 
-        if not os.path.exists(base_dir):
-            print(f'❌ 找不到題庫資料夾: {base_dir}')
-            print('   請建立 題庫/ 資料夾，並將考卷 HTML 放入子資料夾中')
+        print('\n📥 將自動掃描程式同目錄內的所有 JSON 題庫檔')
+        print(f'   掃描資料夾: {script_dir}')
+
+        if not candidate_paths:
+            print('❌ 找不到可掃描的 JSON 檔案')
+            print('   請把一鍵匯出的題庫 JSON 放在 question_bank_manager.py 同一個資料夾')
             return
 
-        htm_files = []
-        for root, dirs, files in os.walk(base_dir):
-            for f in files:
-                if f.endswith('.htm') or f.endswith('.html'):
-                    htm_files.append(os.path.join(root, f))
+        valid_banks = []
+        skipped_files = []
+        error_files = []
+        for import_path in candidate_paths:
+            result = self._load_import_bank_file(import_path)
+            if result["error"]:
+                error_files.append(result)
+            elif result["is_bank"]:
+                valid_banks.append(result)
+            else:
+                skipped_files.append(result)
 
-        if not htm_files:
-            print('❌ 題庫資料夾裡沒有 .htm/.html 檔案')
+        print(f'📂 掃描到 {len(candidate_paths)} 個 JSON 檔')
+
+        if skipped_files:
+            print(f'⏭️ 略過 {len(skipped_files)} 個非題庫 JSON:')
+            for item in skipped_files[:5]:
+                print(f'   - {item["name"]}: {item["reason"]}')
+            if len(skipped_files) > 5:
+                print(f'   ... 其餘 {len(skipped_files) - 5} 個檔案已略過')
+
+        if error_files:
+            print(f'⚠️ 有 {len(error_files)} 個 JSON 無法讀取:')
+            for item in error_files[:5]:
+                print(f'   - {item["name"]}: {item["error"]}')
+            if len(error_files) > 5:
+                print(f'   ... 其餘 {len(error_files) - 5} 個檔案讀取失敗')
+
+        if not valid_banks:
+            print('❌ 沒有找到可匯入的有效題庫 JSON')
             return
 
-        htm_files = sorted(htm_files)
-        print(f'📂 找到 {len(htm_files)} 個 HTML 檔案')
+        planned_banks, total_new, total_duplicates = self._simulate_import_merge(valid_banks)
+        normalized_questions = []
+        questions_to_add = []
+        for bank in planned_banks:
+            normalized_questions.extend(bank["questions"])
+            questions_to_add.extend(bank["new_questions"])
+
+        total_payload = sum(bank["payload_count"] for bank in planned_banks)
+        total_invalid = sum(bank["invalid_count"] for bank in planned_banks)
+        print(f'✅ 偵測到 {len(planned_banks)} 個題庫檔:')
+        for bank in planned_banks:
+            print(
+                f'   - {bank["name"]}: 原始 {bank["payload_count"]} 筆，'
+                f'格式有效 {len(bank["questions"])} 筆，'
+                f'預計新增 {bank["new_count"]} 筆，'
+                f'重複略過 {bank["duplicate_count"]} 筆，'
+                f'無效 {bank["invalid_count"]} 筆'
+            )
+
+        print(
+            f'📊 題庫總計: 原始 {total_payload} 筆，'
+            f'格式有效 {len(normalized_questions)} 筆，'
+            f'預計新增 {total_new} 筆，'
+            f'重複略過 {total_duplicates} 筆，'
+            f'無效 {total_invalid} 筆'
+        )
+
+        preview_source = questions_to_add if questions_to_add else normalized_questions
+        preview_label = '預計新增題目預覽'
+        if not questions_to_add:
+            preview_label = '題目預覽（本次皆為重複題）'
+
+        preview_count = len(preview_source)
         print()
-
-        all_new = []
-        for idx, fp in enumerate(htm_files):
-            rel = os.path.relpath(fp, base_dir)
-            questions = self._parse_exam_html(fp)
-            print(f'  📄 [{idx+1}] {rel}: {len(questions)} 題')
-            for i, q in enumerate(questions):
-                correct = q['answer'] or '(無答案)'
-                print(f'     Q{i+1}: {q["question"][:50]}  → {correct}')
-            print()
-
-            folder_name = os.path.basename(os.path.dirname(fp))
-            cat = input(f'  📝 請輸入 [{idx+1}] 的課程名稱 (Enter=使用資料夾名「{folder_name}」): ').strip()
-            if cat:
-                for q in questions:
-                    q['category'] = cat
-            print()
-            all_new.extend(questions)
-
-        print(f'📊 共解析到 {len(all_new)} 題')
-        if not all_new:
-            return
+        print(f'📝 {preview_label}（共 {preview_count} 題）:')
+        for idx, question in enumerate(preview_source[:preview_count], start=1):
+            answer = question.get('answer', '').strip() or '(無答案)'
+            source_name = question.get('category', '').strip() or '未分類'
+            print(f'   {idx}. [{source_name}] {question["question"][:50]}  → {answer}')
 
         print()
         confirm = input('確認要寫入 questions.json？(y/N): ').strip().lower()
@@ -364,29 +728,39 @@ class QuestionBankManager:
             print('❌ 已取消')
             return
 
-        # Dedup and merge
         added = 0
         skipped = 0
-        for q in all_new:
-            h = hashlib.md5((q.get('question', '') + '|' + '|'.join(
-                o.get('text', '') for o in q.get('options', [])
-            )).encode('utf-8')).hexdigest()
+        file_stats = []
+        for bank in planned_banks:
+            for question in bank["new_questions"]:
+                self.questions_db.append(question)
+                if question.get('source_url'):
+                    self.known_urls.add(question['source_url'])
+                self._register_known_question(question)
 
-            qh = hash(q['question'].strip())
-            if h in self.known_hashes or qh in self.known_hashes:
-                skipped += 1
-            else:
-                self.questions_db.append(q)
-                self.known_hashes.add(h)
-                self.known_hashes.add(qh)
-                added += 1
+            added += bank["new_count"]
+            skipped += bank["duplicate_count"]
+            file_stats.append((bank["name"], bank["new_count"], bank["duplicate_count"]))
 
-        self.save_db()
+        if added > 0:
+            self.save_db()
         print(f'\n✅ 完成！新增 {added} 題，跳過 {skipped} 題（已存在）')
         print(f'📦 題庫總數: {len(self.questions_db)} 題')
+        print('📁 各檔案處理結果:')
+        for file_name, file_added, file_skipped in file_stats:
+            print(f'   - {file_name}: 新增 {file_added} 題，跳過 {file_skipped} 題')
 
-        if added > 0 and input('\n是否上傳到 GitHub？(y/N): ').strip().lower() == 'y':
-            self.push_to_github(added)
+        push_prompt = '\n是否上傳到 GitHub？(y/N): '
+        if added == 0:
+            push_prompt = '\n本次沒有新增題目，是否仍要檢查並推送目前題庫到 GitHub？(y/N): '
+
+        if input(push_prompt).strip().lower() == 'y':
+            commit_message = (
+                f"Import JSON Bank: Added {added} new questions"
+                if added > 0
+                else "Manual Update: Refresh question bank"
+            )
+            self.push_to_github(added, commit_message=commit_message)
 
     def _parse_exam_html(self, filepath):
         """解析單一 HTML 考卷結果檔案"""
@@ -473,7 +847,7 @@ class QuestionBankManager:
             print("1. 🚀 一鍵自動更新 (抓取+下載+上傳)")
             print("2. 📊 查看目前題庫狀態")
             print("3. 🔧 手動輸入網址 (Debug用)")
-            print("4. 📄 匯入 HTML 考卷 (題庫/ 資料夾)")
+            print("4. 📥 匯入題庫 JSON（比對後合併）")
             print("q. 離開")
             
             choice = input("\n請選擇功能 [1, 2, 3, 4, q]: ").strip().lower()
@@ -489,7 +863,7 @@ class QuestionBankManager:
                 if input("是否立即下載? (y/n): ").lower() == 'y':
                     self.scrape_all(auto_push=False)
             elif choice == '4':
-                self.import_html_exams()
+                self.import_question_bank_json()
             elif choice == 'q':
                 break
             else:
