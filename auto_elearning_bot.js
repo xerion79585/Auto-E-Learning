@@ -238,6 +238,9 @@
             const prompt = document.getElementById('_sp');
             if (prompt) prompt.remove();
             _notifyLoginAllowed();
+            if (typeof window.__BOT_MAIN_LOOP === 'function') {
+                window.__BOT_MAIN_LOOP();
+            }
             return true;
         }
         _disableBot();
@@ -257,9 +260,13 @@
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
         const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
         const AUTO_SUBMIT_DELAY_MS = 800;
-        const QUESTIONNAIRE_SUBMIT_DELAY_MS = 500;
-        const QUESTIONNAIRE_CLOSE_GRACE_MS = 2500;
+        const QUESTIONNAIRE_SUBMIT_DELAY_MS = 200;
+        const QUESTIONNAIRE_CLOSE_GRACE_MS = 1200;
         const QUESTIONNAIRE_AUTO_RUN = true;
+        const QUESTIONNAIRE_AUTO_RUN_BOOT_DELAY_MS = 60;
+        const QUESTIONNAIRE_AUTO_RUN_RETRY_MS = 120;
+        const QUESTIONNAIRE_AUTO_RUN_MAX_WAIT_MS = 15000;
+        const QUESTIONNAIRE_CLOSE_NOTICE_MS = 280;
         const DIALOG_BYPASS_MS = 10000;
         const QUESTIONNAIRE_DIALOG_BYPASS_MS = 45000;
         const DIALOG_SWEEP_INTERVAL_MS = 300;
@@ -277,6 +284,7 @@
         const AUTO_CLOSE_ATTEMPTED_KEY = '__BOT_CLOSE_ATTEMPTED__';
         const QUESTIONNAIRE_STATE_KEY = '__BOT_QUESTIONNAIRE_STATE__';
         const QUESTIONNAIRE_AUTO_RUN_KEY = '__BOT_QUESTIONNAIRE_AUTO_RUN_DONE__';
+        const QUESTIONNAIRE_WATCH_KEY = '__BOT_QUESTIONNAIRE_WATCH__';
         const RESULT_EXPORT_TOOLBAR_ID = 'bot-result-export-toolbar';
         const RESULT_EXPORT_BUTTON_ID = 'bot-btn-export-bank';
         const RESULT_EXPORT_LAST_TITLE_KEY = 'qb_export_last_exam_title';
@@ -829,7 +837,7 @@
             logBot(`🪟 偵測到送出後頁面，${AUTO_CLOSE_DELAY_MS}ms 後嘗試自動關閉`);
 
             if (closeKind === 'questionnaire') {
-                await flashCenterNotice('問卷填寫完成，視窗即將關閉', { type: 'success', duration: 1100 });
+                await flashCenterNotice('問卷填寫完成，視窗即將關閉', { type: 'success', duration: QUESTIONNAIRE_CLOSE_NOTICE_MS });
             }
 
             const closeDelay = closeKind === 'questionnaire' ? 80 : AUTO_CLOSE_DELAY_MS;
@@ -1054,6 +1062,26 @@
                 groups[key].push(input);
             });
             return groups;
+        }
+
+        function getQuestionnaireInputs() {
+            return {
+                radios: Array.from(document.querySelectorAll('input[type="radio"]')),
+                checks: Array.from(document.querySelectorAll('input[type="checkbox"]'))
+            };
+        }
+
+        function clearQuestionnaireWatch() {
+            const watch = window[QUESTIONNAIRE_WATCH_KEY];
+            if (watch) {
+                if (watch.bootTimer) clearTimeout(watch.bootTimer);
+                if (watch.pollTimer) clearInterval(watch.pollTimer);
+                if (watch.expireTimer) clearTimeout(watch.expireTimer);
+                if (watch.observer) watch.observer.disconnect();
+            }
+
+            window[QUESTIONNAIRE_WATCH_KEY] = null;
+            window[QUESTIONNAIRE_AUTO_RUN_KEY] = false;
         }
 
         function isQuestionnairePage() {
@@ -1832,22 +1860,24 @@
             }
         }
 
-        function runQuestionnaireAutoFill(source) {
-            if (!isQuestionnairePage()) return;
-            if (getQuestionnaireState() !== 'idle') return;
+        function runQuestionnaireAutoFill(source, options) {
+            const settings = Object.assign({ quietIfEmpty: false }, options || {});
+            if (!isQuestionnairePage()) return false;
+            if (getQuestionnaireState() !== 'idle') return false;
 
-            const radios = Array.from(document.querySelectorAll('input[type="radio"]'));
-            const checks = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+            const { radios, checks } = getQuestionnaireInputs();
             if (radios.length === 0 && checks.length === 0) {
-                logBot('⚠️ 問卷頁沒有可填寫的欄位');
-                return;
+                if (!settings.quietIfEmpty) {
+                    logBot('⚠️ 問卷頁沒有可填寫的欄位');
+                }
+                return false;
             }
 
-            const alreadyAnswered = radios.some((radio) => radio.checked);
+            const alreadyAnswered = radios.some((radio) => radio.checked) || checks.some((checkbox) => checkbox.checked);
             if (alreadyAnswered) {
                 logBot('ℹ️ 問卷已有作答內容，略過自動填寫');
                 setQuestionnaireState('skipped');
-                return;
+                return true;
             }
 
             setQuestionnaireState('filling');
@@ -1876,6 +1906,78 @@
             setTimeout(() => {
                 submitQuestionnaire();
             }, QUESTIONNAIRE_SUBMIT_DELAY_MS);
+            return true;
+        }
+
+        function scheduleQuestionnaireAutoFill() {
+            if (!QUESTIONNAIRE_AUTO_RUN || !isQuestionnairePage()) {
+                clearQuestionnaireWatch();
+                return;
+            }
+
+            if (getQuestionnaireState() !== 'idle') {
+                clearQuestionnaireWatch();
+                return;
+            }
+
+            if (window[QUESTIONNAIRE_AUTO_RUN_KEY]) {
+                return;
+            }
+
+            const tryFill = () => {
+                if (!isQuestionnairePage()) {
+                    clearQuestionnaireWatch();
+                    return;
+                }
+
+                if (getQuestionnaireState() !== 'idle') {
+                    clearQuestionnaireWatch();
+                    return;
+                }
+
+                const didStart = runQuestionnaireAutoFill('auto', { quietIfEmpty: true });
+                if (didStart) {
+                    clearQuestionnaireWatch();
+                }
+            };
+
+            const watch = {
+                bootTimer: 0,
+                pollTimer: 0,
+                expireTimer: 0,
+                observer: null
+            };
+
+            window[QUESTIONNAIRE_WATCH_KEY] = watch;
+            window[QUESTIONNAIRE_AUTO_RUN_KEY] = true;
+
+            if (document.body && typeof MutationObserver === 'function') {
+                watch.observer = new MutationObserver(() => {
+                    tryFill();
+                });
+                watch.observer.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+
+            watch.bootTimer = setTimeout(() => {
+                tryFill();
+            }, QUESTIONNAIRE_AUTO_RUN_BOOT_DELAY_MS);
+
+            watch.pollTimer = setInterval(() => {
+                tryFill();
+            }, QUESTIONNAIRE_AUTO_RUN_RETRY_MS);
+
+            watch.expireTimer = setTimeout(() => {
+                if (window[QUESTIONNAIRE_WATCH_KEY] !== watch) return;
+                if (getQuestionnaireState() === 'idle') {
+                    logBot('⚠️ 問卷欄位載入較慢，暫停自動填寫監看');
+                }
+                clearQuestionnaireWatch();
+            }, QUESTIONNAIRE_AUTO_RUN_MAX_WAIT_MS);
+
+            tryFill();
         }
 
         // ---- one-click solver ----
@@ -2303,7 +2405,7 @@
                 if (!marker && getQuestionnaireState() !== 'idle') {
                     setQuestionnaireState('idle');
                 }
-                window[QUESTIONNAIRE_AUTO_RUN_KEY] = false;
+                clearQuestionnaireWatch();
             }
 
             if (shouldAutoCloseCurrentPage()) {
@@ -2389,11 +2491,8 @@
             initExamToolbar();
 
             // 5. questionnaire
-            if (QUESTIONNAIRE_AUTO_RUN && isQuestionnairePage() && !window[QUESTIONNAIRE_AUTO_RUN_KEY] && getQuestionnaireState() === 'idle') {
-                window[QUESTIONNAIRE_AUTO_RUN_KEY] = true;
-                setTimeout(() => {
-                    runQuestionnaireAutoFill('auto');
-                }, 300);
+            if (QUESTIONNAIRE_AUTO_RUN && isQuestionnairePage() && getQuestionnaireState() === 'idle') {
+                scheduleQuestionnaireAutoFill();
             }
 
             // 6. certificate download button on learn record page
@@ -2404,6 +2503,7 @@
             }
         }
 
+        window.__BOT_MAIN_LOOP = mainLoop;
         bootstrapPendingDialogBypass();
         mainLoop();
         setInterval(mainLoop, 1000);
@@ -2418,7 +2518,7 @@
     }, 300);
 
     // Check whitelist in parallel (only allowed accounts can use the bot)
-    setTimeout(_chk, 500);
+    setTimeout(_chk, 150);
 
     // Re-check periodically
     setInterval(() => {
