@@ -259,7 +259,8 @@
         const TRUE_VALS = ['○', 'o', 'v', '是', 'true', 'correct', '對', '圈', 'right', '正確', 't'];
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
         const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
-        const AUTO_SUBMIT_DELAY_MS = 800;
+        const AUTO_SUBMIT_DELAY_MS = 120;
+        const EXAM_SUBMIT_NOTICE_MS = 180;
         const QUESTIONNAIRE_SUBMIT_DELAY_MS = 200;
         const QUESTIONNAIRE_CLOSE_GRACE_MS = 1200;
         const QUESTIONNAIRE_AUTO_RUN = true;
@@ -2081,8 +2082,7 @@
                     return;
                 }
 
-                await flashCenterNotice('作答完成，即將送出考卷', { type: 'success', duration: 1200 });
-                await flashCenterNotice('視窗即將自動關閉', { type: 'success', duration: 1000 });
+                await flashCenterNotice('作答完成，立即送出考卷', { type: 'success', duration: EXAM_SUBMIT_NOTICE_MS });
                 if (AUTO_SUBMIT_DELAY_MS > 0) {
                     await sleep(AUTO_SUBMIT_DELAY_MS);
                 }
