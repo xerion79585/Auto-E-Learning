@@ -258,7 +258,19 @@
         // ... (insert full _initBot content here) ...
         const TRUE_VALS = ['○', 'o', 'v', '是', 'true', 'correct', '對', '圈', 'right', '正確', 't'];
         const FALSE_VALS = ['╳', 'x', '✕', '否', 'false', 'incorrect', 'wrong', '錯', '叉', '錯誤', 'f'];
-        const normalize = (s) => (s || '').replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
+        const normalize = (s) => {
+            const decoded = String(s || '')
+                .replace(/&lt;|&#60;|&#x3c;/gi, '<')
+                .replace(/&gt;|&#62;|&#x3e;/gi, '>')
+                .normalize('NFKC');
+            return decoded.replace(/[\s\u3000\t\n\r\u00a0"'.:;!?()\[\]{}<>《》「」【】、，。─]/g, '').toLowerCase();
+        };
+        const escapeHtml = (s) => String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
         const AUTO_SUBMIT_DELAY_MS = 120;
         const EXAM_SUBMIT_NOTICE_MS = 180;
         const QUESTIONNAIRE_SUBMIT_DELAY_MS = 200;
@@ -2135,11 +2147,11 @@
                             const m = url.match(/post\/(\d+)/);
                             if (m) title += ` (${m[1]})`;
                         }
-                        idx.set(url, { title, url, questions: [], fullText: title.toLowerCase() });
+                        idx.set(url, { title, url, questions: [], fullText: normalize(title) });
                     }
                     const entry = idx.get(url);
                     entry.questions.push(item);
-                    entry.fullText += ' ' + (item.question || '').toLowerCase();
+                    entry.fullText += ' ' + normalize(item.question || '');
                 });
                 return idx;
             }
@@ -2148,7 +2160,7 @@
                 const r = document.getElementById('bot-res-area');
                 let html = `
                     <div style="background:#d4edda;padding:10px;margin-bottom:10px;border-radius:5px;">
-                        <b>📚 ${examObj.title}</b><br>
+                        <b>📚 ${escapeHtml(examObj.title)}</b><br>
                         <small>共 ${examObj.questions.length} 題</small>
                         <button id="bot-back-btn" style="float:right;padding:2px 8px;font-size:11px;cursor:pointer;">↩ 返回列表</button>
                     </div>
@@ -2161,14 +2173,14 @@
                     let ansHtml = '';
                     if (item.options) {
                         item.options.forEach(opt => {
-                            if (opt.correct) ansHtml += `<div style="color:#059669;font-weight:bold;">✓ ${opt.text}</div>`;
-                            else ansHtml += `<div style="color:#9ca3af;">　 ${opt.text}</div>`;
+                            if (opt.correct) ansHtml += `<div style="color:#059669;font-weight:bold;">✓ ${escapeHtml(opt.text)}</div>`;
+                            else ansHtml += `<div style="color:#9ca3af;">　 ${escapeHtml(opt.text)}</div>`;
                         });
                     } else if (item.answer) {
-                        ansHtml = `<div style="color:#059669;font-weight:bold;">✓ ${item.answer}</div>`;
+                        ansHtml = `<div style="color:#059669;font-weight:bold;">✓ ${escapeHtml(item.answer)}</div>`;
                     }
                     html += `<div class="bot-q-card" style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:12px;margin-bottom:10px;">
-                        <div style="font-weight:bold;color:#1f2937;margin-bottom:6px;">Q${i + 1}: ${item.question}</div>
+                        <div style="font-weight:bold;color:#1f2937;margin-bottom:6px;">Q${i + 1}: ${escapeHtml(item.question)}</div>
                         <div style="color:#059669;font-weight:bold;">答案：${ansHtml.includes('<br>') ? '<br>• ' + ansHtml : ansHtml}</div>
                     </div>`;
                 });
@@ -2195,10 +2207,10 @@
                 const qInput = document.getElementById('bot-quick-search');
                 const qList = document.getElementById('bot-answer-list');
                 function doQuickFilter(kw) {
-                    kw = kw.toLowerCase().trim();
+                    kw = normalize(kw);
                     let first = null;
                     qList.querySelectorAll('.bot-q-card').forEach(card => {
-                        const txt = card.innerText.toLowerCase();
+                        const txt = normalize(card.innerText);
                         if (!kw || txt.includes(kw)) {
                             card.style.display = 'block';
                             if (kw && !first) first = card;
@@ -2229,19 +2241,19 @@
                 if (!qRaw) { resArea.innerHTML = ''; return; }
 
                 resArea.innerHTML = '<div style="color:blue">🔍 搜尋中...</div>';
-                const qNorm = qRaw.toLowerCase().replace(/\s+/g, '');
+                const qNorm = normalize(qRaw);
                 const results = [];
                 EXAM_INDEX.forEach(exam => {
-                    if (exam.fullText.replace(/\s+/g, '').includes(qNorm)) results.push(exam);
+                    if (exam.fullText.includes(qNorm)) results.push(exam);
                 });
 
                 if (results.length === 0) {
-                    resArea.innerHTML = `<div style="color:red;padding:10px;background:#fee;">❌ 找不到「${qRaw}」</div>`;
+                    resArea.innerHTML = `<div style="color:red;padding:10px;background:#fee;">❌ 找不到「${escapeHtml(qRaw)}」</div>`;
                     return;
                 }
 
                 results.sort((a, b) => {
-                    const aT = a.title.toLowerCase(), bT = b.title.toLowerCase();
+                    const aT = normalize(a.title), bT = normalize(b.title);
                     if (aT.includes(qNorm) && !bT.includes(qNorm)) return -1;
                     if (!aT.includes(qNorm) && bT.includes(qNorm)) return 1;
                     return 0;
@@ -2252,12 +2264,12 @@
                 let html = `<div style="background:#fff3cd;padding:10px;margin-bottom:10px;border-radius:5px;">
                     <b>🔍 找到 ${results.length} 個相關測驗</b><br><small>請點選以查看：</small></div>`;
                 results.forEach((exam, idx) => {
-                    const note = exam.title.toLowerCase().replace(/\s+/g, '').includes(qNorm)
+                    const note = normalize(exam.title).includes(qNorm)
                         ? '<span style="color:green">● 標題吻合</span>'
                         : '<span style="color:#666">○ 內文吻合</span>';
                     html += `<div class="bot-cat-item" data-url="${exam.url}"
                         style="background:#fff;border:1px solid #ddd;border-radius:5px;padding:10px;margin-bottom:6px;cursor:pointer;">
-                        <div><b>${idx + 1}. ${exam.title}</b></div>
+                        <div><b>${idx + 1}. ${escapeHtml(exam.title)}</b></div>
                         <div style="font-size:11px;color:#666;margin-top:3px;display:flex;justify-content:space-between;">
                             <span>${exam.questions.length} 題</span><span>${note}</span>
                         </div></div>`;
