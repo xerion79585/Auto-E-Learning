@@ -460,7 +460,7 @@
                             if (typeof json === 'string') json = JSON.parse(json);
                             window.__BOT_DB = json;
                             if (statusEl) statusEl.innerHTML = `<div style="color:green">✅ 題庫下載完成 (共 ${json.length} 題)</div>`;
-                            setTimeout(() => resolve(json), 100);
+                            resolve(json);
                         } catch (err) {
                             if (statusEl) statusEl.innerHTML = `<div style="color:red">❌ 解析失敗: ${err.message}</div>`;
                             resolve(null);
@@ -2004,7 +2004,7 @@
                 const db = await loadDatabase(null);
                 if (!db) throw new Error('題庫下載失敗');
                 if (!hadCachedDb) {
-                    await flashCenterNotice('題庫下載完成', { type: 'success', duration: 1000 });
+                    hideCenterNotice(true);
                 }
                 logBot(`✅ 載入 ${db.length} 題`);
 
