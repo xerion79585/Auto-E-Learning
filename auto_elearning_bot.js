@@ -9,6 +9,11 @@
     const _k3 = _d('==gdzNWP0VHc0V3b/IWdw9CSZhHO28kbmVGW6ZDd1okVrdVQ0U2XZpXdMlWRfFXN3NESsFzaEJ3dI5kVZFWMVlVNysUUV5Ubq5Ge1Z3YzQTRUV0cfRGNKR2Ui9mbTJldx0CWDFEUy8SZvQ2LzRXZlh2ckFWZyB3cv02bj5SZsd2bvdmLzN2bk9yL6MHc0RHa');
     const _cd = 0xea60;
     const _ci = 0xea60;
+    const _smck = '_sheet_gid_map_cache';
+    const _smtk = '_sheet_gid_map_time';
+    const _rcck = '_recommended_courses_cache';
+    const _rctk = '_recommended_courses_time';
+    const _rcsn = '推薦課程';
 
     // ---- ntfy login notification ----
     function _notifyLoginAllowed() {
@@ -93,6 +98,163 @@
         return GM_getValue('_uId', '');
     }
 
+    function _rJ(key, fallback) {
+        const raw = GM_getValue(key, null);
+        if (!raw) return fallback;
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function _wJ(key, value) {
+        GM_setValue(key, JSON.stringify(value));
+    }
+
+    function _gPB() {
+        try {
+            const url = new URL(_k3);
+            return `${url.origin}${url.pathname}`;
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function _gPH() {
+        const base = _gPB();
+        if (!base) return '';
+        return base.endsWith('/pub') ? `${base}html` : base;
+    }
+
+    function _gPC(gid) {
+        const base = _gPB();
+        if (!base) return '';
+        if (!gid) return `${base}?output=csv`;
+        return `${base}?gid=${encodeURIComponent(gid)}&single=true&output=csv`;
+    }
+
+    function _dJS(value) {
+        return String(value || '')
+            .replace(/\\u([\dA-Fa-f]{4})/g, function (_, hex) { return String.fromCharCode(parseInt(hex, 16)); })
+            .replace(/\\x([\dA-Fa-f]{2})/g, function (_, hex) { return String.fromCharCode(parseInt(hex, 16)); })
+            .replace(/\\\//g, '/')
+            .replace(/\\"/g, '"')
+            .replace(/\\\\/g, '\\');
+    }
+
+    function _gSM() {
+        return new Promise((resolve) => {
+            const cached = _rJ(_smck, null);
+            const cacheTime = GM_getValue(_smtk, 0);
+            if (cached && (Date.now() - cacheTime) < _cd) {
+                resolve(cached);
+                return;
+            }
+
+            const htmlUrl = _gPH();
+            if (!htmlUrl) {
+                resolve(cached || {});
+                return;
+            }
+
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: htmlUrl,
+                onload: function (response) {
+                    try {
+                        const html = String(response.responseText || '');
+                        const map = {};
+                        const regex = /items\.push\(\{name:\s*"((?:\\.|[^"])*)"[\s\S]*?gid:\s*"(-?\d+)"/g;
+                        let match = null;
+
+                        while ((match = regex.exec(html)) !== null) {
+                            const name = _dJS(match[1]).trim();
+                            const gid = (match[2] || '').trim();
+                            if (name && gid) {
+                                map[name] = gid;
+                            }
+                        }
+
+                        if (Object.keys(map).length) {
+                            _wJ(_smck, map);
+                            GM_setValue(_smtk, Date.now());
+                            resolve(map);
+                            return;
+                        }
+
+                        resolve(cached || {});
+                    } catch (error) {
+                        resolve(cached || {});
+                    }
+                },
+                onerror: function () {
+                    resolve(cached || {});
+                }
+            });
+        });
+    }
+
+    function _gRC() {
+        return new Promise((resolve) => {
+            const cached = _rJ(_rcck, []);
+            const cacheTime = GM_getValue(_rctk, 0);
+            if (Array.isArray(cached) && (Date.now() - cacheTime) < _cd) {
+                resolve(cached);
+                return;
+            }
+
+            _gSM().then((sheetMap) => {
+                const gid = sheetMap && sheetMap[_rcsn];
+                if (!gid) {
+                    _wJ(_rcck, []);
+                    GM_setValue(_rctk, Date.now());
+                    resolve([]);
+                    return;
+                }
+
+                const csvUrl = _gPC(gid);
+                if (!csvUrl) {
+                    resolve(Array.isArray(cached) ? cached : []);
+                    return;
+                }
+
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: csvUrl,
+                    onload: function (response) {
+                        try {
+                            const text = String(response.responseText || '').replace(/\r/g, '').trim();
+                            const lines = text ? text.split('\n') : [];
+                            const courses = [];
+                            const seen = new Set();
+
+                            for (let i = 1; i < lines.length; i++) {
+                                const cols = _pL(lines[i]);
+                                const title = cols.length >= 1 ? cols[0].trim() : '';
+                                const url = cols.length >= 2 ? cols[1].trim() : '';
+                                const dedupeKey = `${title}\n${url}`;
+                                if (!title || !url || seen.has(dedupeKey)) continue;
+                                seen.add(dedupeKey);
+                                courses.push({ title, url });
+                            }
+
+                            _wJ(_rcck, courses);
+                            GM_setValue(_rctk, Date.now());
+                            resolve(courses);
+                        } catch (error) {
+                            resolve(Array.isArray(cached) ? cached : []);
+                        }
+                    },
+                    onerror: function () {
+                        resolve(Array.isArray(cached) ? cached : []);
+                    }
+                });
+            }).catch(function () {
+                resolve(Array.isArray(cached) ? cached : []);
+            });
+        });
+    }
 
     function _gC() {
         return new Promise((resolve) => {
@@ -303,6 +465,7 @@
         const RESULT_EXPORT_LAST_TITLE_KEY = 'qb_export_last_exam_title';
         const RESULT_EXPORT_LAST_CONTEXT_KEY = 'qb_export_last_course_context';
         const RESULT_EXPORT_COURSE_CONTEXT_TTL_MS = 1000 * 60 * 60 * 6;
+        const RECOMMENDED_COURSES_BOARD_ID = 'bot-recommended-courses-board';
         const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
         function logBot(message) {
@@ -492,6 +655,141 @@
             div.id = id; div.innerHTML = html;
             document.body.appendChild(div);
             return div;
+        }
+
+        function isSafeHttpUrl(url) {
+            try {
+                const parsed = new URL(url, window.location.href);
+                return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+            } catch (error) {
+                return false;
+            }
+        }
+
+        function getRecommendedCoursesMountTarget() {
+            const selectors = [
+                '#content',
+                '#main',
+                '.content',
+                '.container',
+                '.page-content',
+                '.wrapper',
+                'main',
+                'body'
+            ];
+
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element && element.isConnected) {
+                    return element;
+                }
+            }
+
+            return document.body;
+        }
+
+        function renderRecommendedCoursesBoard(courses) {
+            const existing = document.getElementById(RECOMMENDED_COURSES_BOARD_ID);
+            if (existing) existing.remove();
+            if (!Array.isArray(courses) || !courses.length || !document.body) return;
+
+            const mountTarget = getRecommendedCoursesMountTarget();
+            if (!mountTarget) return;
+
+            const board = document.createElement('section');
+            board.id = RECOMMENDED_COURSES_BOARD_ID;
+            Object.assign(board.style, {
+                position: 'relative',
+                margin: '18px auto',
+                width: 'min(980px, calc(100% - 24px))',
+                padding: '20px 22px',
+                background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.96) 0%, rgba(30, 64, 175, 0.94) 100%)',
+                color: '#fff',
+                borderRadius: '18px',
+                border: '1px solid rgba(191, 219, 254, 0.32)',
+                boxShadow: '0 16px 38px rgba(15, 23, 42, 0.18)',
+                overflow: 'hidden',
+                fontFamily: 'sans-serif'
+            });
+
+            const cardsHtml = courses.map((course, index) => {
+                const title = escapeHtml(course.title);
+                const href = escapeHtml(course.url);
+                return `
+                    <a href="${href}" target="_blank" rel="noopener noreferrer"
+                        style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:14px;text-decoration:none;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.12);color:#fff;transition:transform .15s ease, background .15s ease, border-color .15s ease;">
+                        <span style="display:flex;align-items:center;gap:12px;min-width:0;">
+                            <span style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:rgba(250, 204, 21, 0.18);color:#fde68a;font-weight:700;font-size:13px;">${index + 1}</span>
+                            <span style="display:block;min-width:0;font-size:15px;font-weight:700;line-height:1.45;word-break:break-word;">${title}</span>
+                        </span>
+                        <span style="flex:0 0 auto;font-size:13px;font-weight:700;color:#bfdbfe;white-space:nowrap;">立即報名 ↗</span>
+                    </a>
+                `;
+            }).join('');
+
+            board.innerHTML = `
+                <div style="position:absolute;inset:auto -80px -90px auto;width:220px;height:220px;background:radial-gradient(circle, rgba(96,165,250,0.28) 0%, rgba(96,165,250,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:-70px auto auto -60px;width:180px;height:180px;background:radial-gradient(circle, rgba(250,204,21,0.18) 0%, rgba(250,204,21,0) 72%);pointer-events:none;"></div>
+                <div style="position:relative;z-index:1;">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+                        <div>
+                            <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(250, 204, 21, 0.16);color:#fde68a;font-size:12px;font-weight:800;letter-spacing:.08em;">RECOMMENDED COURSES</div>
+                            <h2 style="margin:12px 0 6px;font-size:24px;line-height:1.2;color:#fff;">推薦課程公告</h2>
+                            <p style="margin:0;font-size:14px;line-height:1.7;color:rgba(219, 234, 254, 0.96);">以下課程由管理端維護在黑名單 Google Sheet 的「推薦課程」工作表，使用者可直接點擊連結前往報名。</p>
+                        </div>
+                        <div style="padding:8px 12px;border-radius:12px;background:rgba(255,255,255,0.10);font-size:13px;font-weight:700;color:#dbeafe;">共 ${courses.length} 門課</div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px;">
+                        ${cardsHtml}
+                    </div>
+                </div>
+            `;
+
+            board.querySelectorAll('a').forEach((link) => {
+                link.addEventListener('mouseenter', () => {
+                    link.style.transform = 'translateY(-2px)';
+                    link.style.background = 'rgba(255,255,255,0.16)';
+                    link.style.borderColor = 'rgba(191,219,254,0.52)';
+                });
+                link.addEventListener('mouseleave', () => {
+                    link.style.transform = 'translateY(0)';
+                    link.style.background = 'rgba(255,255,255,0.10)';
+                    link.style.borderColor = 'rgba(255,255,255,0.12)';
+                });
+            });
+
+            if (mountTarget === document.body) {
+                mountTarget.insertBefore(board, mountTarget.firstChild);
+            } else {
+                mountTarget.insertBefore(board, mountTarget.firstChild || null);
+            }
+        }
+
+        function initRecommendedCoursesBoard() {
+            if (!_isHomePage() || !window.__BOT_AUTH) {
+                const existing = document.getElementById(RECOMMENDED_COURSES_BOARD_ID);
+                if (existing && !_isHomePage()) existing.remove();
+                return;
+            }
+
+            if (document.body && document.body.dataset.botRecommendedCoursesLoading === '1') {
+                return;
+            }
+
+            if (document.body) {
+                document.body.dataset.botRecommendedCoursesLoading = '1';
+            }
+
+            _gRC().then((courses) => {
+                const safeCourses = Array.isArray(courses)
+                    ? courses.filter((course) => course && course.title && course.url && isSafeHttpUrl(course.url))
+                    : [];
+                renderRecommendedCoursesBoard(safeCourses);
+            }).finally(() => {
+                if (document.body) {
+                    delete document.body.dataset.botRecommendedCoursesLoading;
+                }
+            });
         }
 
         function buildDbIndex(db) {
@@ -2498,6 +2796,7 @@
             // 3. learn pages - track course context and result export
             startCourseContextTracking();
             initResultExportToolbar();
+            initRecommendedCoursesBoard();
 
             // 4. exam page
             initExamToolbar();
