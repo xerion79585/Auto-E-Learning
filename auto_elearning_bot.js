@@ -466,6 +466,7 @@
         const RESULT_EXPORT_LAST_CONTEXT_KEY = 'qb_export_last_course_context';
         const RESULT_EXPORT_COURSE_CONTEXT_TTL_MS = 1000 * 60 * 60 * 6;
         const RECOMMENDED_COURSES_BOARD_ID = 'bot-recommended-courses-board';
+        const RECOMMENDED_COURSES_MOUSE_STATE_KEY = '__BOT_RECOMMENDED_COURSES_MOUSE__';
         const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
         function logBot(message) {
@@ -666,26 +667,56 @@
             }
         }
 
-        function getRecommendedCoursesMountTarget() {
-            const selectors = [
-                '#content',
-                '#main',
-                '.content',
-                '.container',
-                '.page-content',
-                '.wrapper',
-                'main',
-                'body'
-            ];
+        function ensureRecommendedCoursesPointerFollow(board) {
+            if (!board || board.dataset.botPointerFollowReady === '1') return;
+            board.dataset.botPointerFollowReady = '1';
 
-            for (const selector of selectors) {
-                const element = document.querySelector(selector);
-                if (element && element.isConnected) {
-                    return element;
-                }
+            if (!window[RECOMMENDED_COURSES_MOUSE_STATE_KEY]) {
+                const state = {
+                    pointerX: window.innerWidth,
+                    pointerY: 0,
+                    offsetX: 0,
+                    offsetY: 0,
+                    currentX: 0,
+                    currentY: 0,
+                    frameId: 0,
+                    boards: new Set()
+                };
+
+                const animate = () => {
+                    state.currentX += (state.offsetX - state.currentX) * 0.12;
+                    state.currentY += (state.offsetY - state.currentY) * 0.12;
+
+                    state.boards.forEach((element) => {
+                        if (!element || !element.isConnected) return;
+                        element.style.transform = `translate3d(${state.currentX.toFixed(2)}px, ${state.currentY.toFixed(2)}px, 0)`;
+                    });
+
+                    state.frameId = window.requestAnimationFrame(animate);
+                };
+
+                const handlePointer = (event) => {
+                    state.pointerX = event.clientX;
+                    state.pointerY = event.clientY;
+
+                    const dx = event.clientX - window.innerWidth;
+                    const dy = event.clientY;
+                    state.offsetX = Math.max(-18, Math.min(8, dx * 0.03));
+                    state.offsetY = Math.max(-10, Math.min(18, dy * 0.015));
+                };
+
+                window.addEventListener('mousemove', handlePointer, { passive: true });
+                window.addEventListener('mouseleave', () => {
+                    state.offsetX = 0;
+                    state.offsetY = 0;
+                });
+
+                state.frameId = window.requestAnimationFrame(animate);
+                window[RECOMMENDED_COURSES_MOUSE_STATE_KEY] = state;
             }
 
-            return document.body;
+            const globalState = window[RECOMMENDED_COURSES_MOUSE_STATE_KEY];
+            globalState.boards.add(board);
         }
 
         function renderRecommendedCoursesBoard(courses) {
@@ -693,23 +724,26 @@
             if (existing) existing.remove();
             if (!Array.isArray(courses) || !courses.length || !document.body) return;
 
-            const mountTarget = getRecommendedCoursesMountTarget();
-            if (!mountTarget) return;
-
-            const board = document.createElement('section');
+            const board = document.createElement('aside');
             board.id = RECOMMENDED_COURSES_BOARD_ID;
             Object.assign(board.style, {
-                position: 'relative',
-                margin: '18px auto',
-                width: 'min(980px, calc(100% - 24px))',
-                padding: '20px 22px',
-                background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.96) 0%, rgba(30, 64, 175, 0.94) 100%)',
+                position: 'fixed',
+                top: '16px',
+                right: '16px',
+                zIndex: '9999998',
+                width: 'min(320px, calc(100vw - 24px))',
+                maxHeight: 'min(72vh, 520px)',
+                padding: '14px',
+                background: 'linear-gradient(150deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.94) 52%, rgba(30, 64, 175, 0.94) 100%)',
                 color: '#fff',
                 borderRadius: '18px',
-                border: '1px solid rgba(191, 219, 254, 0.32)',
-                boxShadow: '0 16px 38px rgba(15, 23, 42, 0.18)',
+                border: '1px solid rgba(191, 219, 254, 0.22)',
+                boxShadow: '0 16px 32px rgba(15, 23, 42, 0.26)',
                 overflow: 'hidden',
-                fontFamily: 'sans-serif'
+                fontFamily: 'sans-serif',
+                backdropFilter: 'blur(10px)',
+                transform: 'translate3d(0, 0, 0)',
+                transition: 'box-shadow .18s ease, border-color .18s ease'
             });
 
             const cardsHtml = courses.map((course, index) => {
@@ -717,33 +751,37 @@
                 const href = escapeHtml(course.url);
                 return `
                     <a href="${href}" target="_blank" rel="noopener noreferrer"
-                        style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:14px;text-decoration:none;background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.12);color:#fff;transition:transform .15s ease, background .15s ease, border-color .15s ease;">
-                        <span style="display:flex;align-items:center;gap:12px;min-width:0;">
-                            <span style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:rgba(250, 204, 21, 0.18);color:#fde68a;font-weight:700;font-size:13px;">${index + 1}</span>
-                            <span style="display:block;min-width:0;font-size:15px;font-weight:700;line-height:1.45;word-break:break-word;">${title}</span>
+                        style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;text-decoration:none;background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.10);color:#fff;transition:transform .15s ease, background .15s ease, border-color .15s ease;">
+                        <span style="display:flex;align-items:center;gap:10px;min-width:0;">
+                            <span style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:999px;background:rgba(250, 204, 21, 0.18);color:#fde68a;font-weight:700;font-size:12px;">${index + 1}</span>
+                            <span style="display:-webkit-box;min-width:0;font-size:13px;font-weight:700;line-height:1.4;word-break:break-word;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${title}</span>
                         </span>
-                        <span style="flex:0 0 auto;font-size:13px;font-weight:700;color:#bfdbfe;white-space:nowrap;">立即報名 ↗</span>
+                        <span style="flex:0 0 auto;font-size:12px;font-weight:700;color:#bfdbfe;white-space:nowrap;">報名 ↗</span>
                     </a>
                 `;
             }).join('');
 
             board.innerHTML = `
-                <div style="position:absolute;inset:auto -80px -90px auto;width:220px;height:220px;background:radial-gradient(circle, rgba(96,165,250,0.28) 0%, rgba(96,165,250,0) 72%);pointer-events:none;"></div>
-                <div style="position:absolute;inset:-70px auto auto -60px;width:180px;height:180px;background:radial-gradient(circle, rgba(250,204,21,0.18) 0%, rgba(250,204,21,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:-40px -30px auto auto;width:140px;height:140px;background:radial-gradient(circle, rgba(96,165,250,0.28) 0%, rgba(96,165,250,0) 72%);pointer-events:none;"></div>
+                <div style="position:absolute;inset:auto auto -52px -36px;width:120px;height:120px;background:radial-gradient(circle, rgba(250,204,21,0.16) 0%, rgba(250,204,21,0) 72%);pointer-events:none;"></div>
                 <div style="position:relative;z-index:1;">
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
-                        <div>
-                            <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(250, 204, 21, 0.16);color:#fde68a;font-size:12px;font-weight:800;letter-spacing:.08em;">RECOMMENDED COURSES</div>
-                            <h2 style="margin:12px 0 6px;font-size:24px;line-height:1.2;color:#fff;">推薦課程公告</h2>
-                            <p style="margin:0;font-size:14px;line-height:1.7;color:rgba(219, 234, 254, 0.96);">以下課程由管理端維護在黑名單 Google Sheet 的「推薦課程」工作表，使用者可直接點擊連結前往報名。</p>
-                        </div>
-                        <div style="padding:8px 12px;border-radius:12px;background:rgba(255,255,255,0.10);font-size:13px;font-weight:700;color:#dbeafe;">共 ${courses.length} 門課</div>
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;">
+                        <h2 style="margin:0;font-size:18px;line-height:1.2;color:#fff;">推薦課程</h2>
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));gap:12px;">
+                    <div style="display:grid;gap:8px;max-height:min(52vh, 360px);overflow:auto;padding-right:4px;">
                         ${cardsHtml}
                     </div>
                 </div>
             `;
+
+            board.addEventListener('mouseenter', () => {
+                board.style.boxShadow = '0 22px 42px rgba(15, 23, 42, 0.34)';
+                board.style.borderColor = 'rgba(191, 219, 254, 0.34)';
+            });
+            board.addEventListener('mouseleave', () => {
+                board.style.boxShadow = '0 16px 32px rgba(15, 23, 42, 0.26)';
+                board.style.borderColor = 'rgba(191, 219, 254, 0.22)';
+            });
 
             board.querySelectorAll('a').forEach((link) => {
                 link.addEventListener('mouseenter', () => {
@@ -758,11 +796,8 @@
                 });
             });
 
-            if (mountTarget === document.body) {
-                mountTarget.insertBefore(board, mountTarget.firstChild);
-            } else {
-                mountTarget.insertBefore(board, mountTarget.firstChild || null);
-            }
+            document.body.appendChild(board);
+            ensureRecommendedCoursesPointerFollow(board);
         }
 
         function initRecommendedCoursesBoard() {
