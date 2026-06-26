@@ -689,7 +689,7 @@
 
                     state.boards.forEach((element) => {
                         if (!element || !element.isConnected) return;
-                        element.style.transform = `translate3d(${state.currentX.toFixed(2)}px, ${state.currentY.toFixed(2)}px, 0)`;
+                        element.style.transform = `translate3d(${state.currentX.toFixed(2)}px, calc(-50% + ${state.currentY.toFixed(2)}px), 0)`;
                     });
 
                     state.frameId = window.requestAnimationFrame(animate);
@@ -700,9 +700,9 @@
                     state.pointerY = event.clientY;
 
                     const dx = event.clientX - window.innerWidth;
-                    const dy = event.clientY;
+                    const dy = event.clientY - (window.innerHeight * 0.5);
                     state.offsetX = Math.max(-18, Math.min(8, dx * 0.03));
-                    state.offsetY = Math.max(-10, Math.min(18, dy * 0.015));
+                    state.offsetY = Math.max(-20, Math.min(20, dy * 0.02));
                 };
 
                 window.addEventListener('mousemove', handlePointer, { passive: true });
@@ -728,7 +728,7 @@
             board.id = RECOMMENDED_COURSES_BOARD_ID;
             Object.assign(board.style, {
                 position: 'fixed',
-                top: '16px',
+                top: '50%',
                 right: '16px',
                 zIndex: '9999998',
                 width: 'min(320px, calc(100vw - 24px))',
@@ -742,7 +742,7 @@
                 overflow: 'hidden',
                 fontFamily: 'sans-serif',
                 backdropFilter: 'blur(10px)',
-                transform: 'translate3d(0, 0, 0)',
+                transform: 'translate3d(0, calc(-50% + 0px), 0)',
                 transition: 'box-shadow .18s ease, border-color .18s ease'
             });
 
