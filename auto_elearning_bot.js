@@ -354,7 +354,90 @@
 
     function _isHomePage() {
         const path = window.location.pathname.replace(/\/+$/, '') || '/';
-        return path === '/' || path === '/index.php' || path === '/mooc/index.php';
+        if (path === '/' || path === '/index.php') return true;
+        if (path !== '/mooc/index.php') return false;
+
+        const params = new URLSearchParams(window.location.search);
+        return !params.has('ticket');
+    }
+
+    function _isDashboardPage() {
+        const path = window.location.pathname.replace(/\/+$/, '') || '/';
+        return path === '/mooc/user/learn_dashboard.php' || path === '/mooc/user/learn_dashboard_ga.php';
+    }
+
+    const HOME_SWIPER_HIDE_STYLE_ID = '__bot_home_swiper_hide__';
+    let homeSwiperRemoved = false;
+
+    function ensureHomeSwiperHidden() {
+        if (!_isHomePage()) return;
+        if (document.getElementById(HOME_SWIPER_HIDE_STYLE_ID)) return;
+
+        const style = document.createElement('style');
+        style.id = HOME_SWIPER_HIDE_STYLE_ID;
+        style.textContent = `
+            .swiper-container.swiper-container-initialized.swiper-container-horizontal,
+            .swiper-container.swiper-container-horizontal,
+            .swiper-container {
+                display: none !important;
+                visibility: hidden !important;
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function removeHomeSwiper() {
+        if (homeSwiperRemoved || !_isHomePage()) return;
+
+        const selectors = [
+            '.swiper-container.swiper-container-initialized.swiper-container-horizontal',
+            '.swiper-container.swiper-container-horizontal',
+            '.swiper-container'
+        ];
+        let removed = false;
+
+        selectors.forEach((selector) => {
+            document.querySelectorAll(selector).forEach((node) => {
+                node.remove();
+                removed = true;
+            });
+        });
+
+        if (removed) {
+            homeSwiperRemoved = true;
+        }
+    }
+
+    function bootstrapHomeSwiperRemoval() {
+        ensureHomeSwiperHidden();
+        removeHomeSwiper();
+
+        let tries = 0;
+        const intervalId = setInterval(() => {
+            tries += 1;
+            ensureHomeSwiperHidden();
+            removeHomeSwiper();
+            if (homeSwiperRemoved || tries >= 40) {
+                clearInterval(intervalId);
+            }
+        }, 250);
+
+        if (typeof MutationObserver === 'function') {
+            const observer = new MutationObserver(() => {
+                ensureHomeSwiperHidden();
+                removeHomeSwiper();
+                if (homeSwiperRemoved) {
+                    observer.disconnect();
+                }
+            });
+
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+
+            setTimeout(() => observer.disconnect(), 10000);
+        }
     }
 
     function _disableBot() {
@@ -414,6 +497,7 @@
     window.__BOT_DB = null;
     window.__BOT_LOADING = false;
     window.__BOT_AUTH = false; // Enable only after whitelist check passes
+    bootstrapHomeSwiperRemoval();
 
     // ---- core ----
     function _initBot() {
