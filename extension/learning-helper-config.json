@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "configVersion": "2026.08.25.1",
+  "allowlistUrl": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSnobSdJ4d_sETE43cvuxnjmNUQK25YU1aYVNHwrDk1lHCw5q_EiLuzY_e4AWkVJ5t6zXefnO68xYH/pub?output=csv",
+  "questionBankUrl": "https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/questions.json",
+  "recommendedCoursesSheetName": "推薦課程",
+  "features": {
+    "autoHang": true,
+    "autoExam": true,
+    "autoQuestionnaire": true
+  }
+}

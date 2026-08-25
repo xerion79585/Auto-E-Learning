@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>學習小幫手隱私權政策</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #172033;
+      background: #f5f7fb;
+    }
+
+    body {
+      margin: 0;
+      line-height: 1.7;
+    }
+
+    main {
+      box-sizing: border-box;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 36px;
+      background: #ffffff;
+      border: 1px solid #dbe2ef;
+      border-radius: 8px;
+    }
+
+    h1, h2 {
+      color: #0b5d4a;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+    }
+
+    h2 {
+      margin-top: 30px;
+      font-size: 20px;
+    }
+
+    p, li {
+      font-size: 16px;
+    }
+
+    .meta {
+      margin: 0;
+      color: #526070;
+    }
+
+    a {
+      color: #0b6a92;
+    }
+
+    @media (max-width: 640px) {
+      main {
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+        border: 0;
+        border-radius: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>學習小幫手隱私權政策</h1>
+    <p class="meta">生效版本：1.1.0<br>最後更新：2026-08-25</p>
+
+    <h2>適用範圍</h2>
+    <p>本政策適用於 Chrome 擴充功能「學習小幫手」。本擴充功能僅在 <code>https://elearn.hrd.gov.tw/</code> 運作，並以啟用密碼和 UID 白名單限制使用資格。</p>
+
+    <h2>本機處理的資料</h2>
+    <p>擴充功能只會在使用者裝置的 Chrome 本機儲存空間保存啟用狀態、從目標網站頁面讀取的 UID 快取，以及白名單、設定和推薦課程的短期資料快取。</p>
+    <p>啟用密碼只會傳送到擴充功能本機的 service worker 進行雜湊比對，不會以明文保存，也不會傳送給開發者、Google、GitHub 或其他第三方。</p>
+
+    <h2>網路請求與資料來源</h2>
+    <p>為執行功能，擴充功能會建立不含使用者 Cookie 的 HTTPS 請求，以讀取公開 Google Sheets 的白名單與推薦課程資料，以及指定 GitHub 儲存庫內的 JSON 設定與題庫資料。</p>
+    <p>這些請求不會附帶 UID、姓名、密碼、IP 位址、使用者代理字串、完整瀏覽紀錄或其他可識別使用者的內容。UID 僅留在本機，用來與已下載的白名單資料比對。</p>
+
+    <h2>不會收集或分享的資料</h2>
+    <p>本版本不會將姓名、UID、啟用密碼、IP 位址、使用者代理字串、頁面 URL、課程進度、考試答案或問卷內容傳送給開發者。擴充功能不使用廣告、分析追蹤、第三方通知服務或資料販售服務。</p>
+
+    <h2>保留與刪除</h2>
+    <p>本機資料會在擴充功能仍安裝時保留，以維持啟用狀態和離線快取。解除安裝擴充功能會由 Chrome 移除其本機儲存資料。白名單、題庫和設定快取會在後續讀取時依其有效時間更新。</p>
+
+    <h2>外部服務</h2>
+    <p>Google Sheets、GitHub 和目標學習網站各自依其隱私權政策處理連線請求。使用者登入目標學習網站後，網站本身如何處理帳號和課程資料，不受本擴充功能控制。</p>
+
+    <h2>聯絡方式</h2>
+    <p>可透過 <a href="https://github.com/xerion79585/Auto-E-Learning/issues">Auto-E-Learning GitHub Issues</a> 聯絡發布者。</p>
+  </main>
+</body>
+</html>

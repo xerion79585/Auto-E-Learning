@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>學習小幫手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>學習小幫手</h1>
+    <p id="status" role="status">讀取狀態中...</p>
+    <form id="activation-form">
+      <label for="password">啟用密碼</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">啟用擴充功能</button>
+    </form>
+    <p class="hint">啟用後密碼會永久保留；之後進入支援網站時只會檢查登入帳號是否在白名單內。</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title>學習小幫手</title>
+  <desc>抱著小書本的可愛橘色貓咪</desc>
+  <rect width="512" height="512" rx="112" fill="#FFF3D6"/>
+  <circle cx="256" cy="258" r="174" fill="#FFD77A"/>
+  <path d="M127 186 143 82c2-14 19-20 30-10l69 61c10-3 20-4 30-4s20 1 30 4l69-61c11-10 28-4 30 10l16 104c28 33 45 75 45 122 0 104-92 171-190 171S81 412 81 308c0-47 17-89 46-122Z" fill="#F28C5B"/>
+  <path d="M143 101 152 178l58-42Z" fill="#F6B18A"/>
+  <path d="m369 101-9 77-58-42Z" fill="#F6B18A"/>
+  <path d="M174 250c0-18 14-32 32-32s32 14 32 32-14 32-32 32-32-14-32-32Zm100 0c0-18 14-32 32-32s32 14 32 32-14 32-32 32-32-14-32-32Z" fill="#2C4054"/>
+  <circle cx="216" cy="241" r="8" fill="#fff"/>
+  <circle cx="316" cy="241" r="8" fill="#fff"/>
+  <path d="M244 291c8-8 16-8 24 0 8-8 16-8 24 0-2 27-19 42-24 42s-22-15-24-42Z" fill="#F7B4A3"/>
+  <path d="M256 324c-8 18-25 29-46 30m46-30c8 18 25 29 46 30" fill="none" stroke="#2C4054" stroke-width="9" stroke-linecap="round"/>
+  <path d="M168 298 83 281m85 42-91 10m267-35 85-17m-85 42 91 10" fill="none" stroke="#2C4054" stroke-width="8" stroke-linecap="round" opacity=".9"/>
+  <path d="M122 386c39-25 77-37 116-37s77 12 116 37v62H122Z" fill="#F8FAFC" stroke="#2C4054" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M256 349v99M136 397c42-18 82-24 120-18 38-6 78 0 120 18" fill="none" stroke="#4F9D9A" stroke-width="9" stroke-linecap="round"/>
+  <path d="M133 394c28-15 61-21 99-17m147 17c-28-15-61-21-99-17" fill="none" stroke="#BDE6DA" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="117" cy="416" r="13" fill="#F28C5B"/>
+  <circle cx="395" cy="416" r="13" fill="#F28C5B"/>
+</svg>
