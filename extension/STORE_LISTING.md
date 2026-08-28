@@ -9,11 +9,11 @@
 
 ## Detailed description
 
-學習小幫手是 `https://elearn.hrd.gov.tw/` 的學習流程輔助擴充功能。使用者第一次輸入啟用密碼後，擴充功能會在每次進入網站時，於本機讀取目前頁面顯示的 UID，並以公開 Google Sheets 白名單確認使用資格。未通過白名單的帳號不會載入任何學習輔助控制項，且只會顯示未授權提示。
+學習小幫手是 `https://elearn.hrd.gov.tw/` 的學習流程輔助擴充功能。課程內容有時會由 HTTPS 的其他 `*.hrd.gov.tw` 子網域 frame 承載，擴充功能僅在這些 HRD 學習平台網域中執行。使用者第一次輸入啟用密碼後，擴充功能會在每次進入網站時，於本機讀取目前頁面顯示的 UID，並以公開 Google Sheets 白名單確認使用資格。未通過白名單的帳號不會載入任何學習輔助控制項，且只會顯示未授權提示。
 
 通過授權的帳號可使用套件內建的固定程式碼，提供課程掛網、測驗題庫查找及問卷操作等功能。程式碼不會從網路下載或執行；GitHub 與 Google Sheets 僅提供 JSON、CSV 等設定與資料。題庫、白名單和功能開關可更新，但任何功能邏輯變更都必須透過新版擴充功能發布。
 
-本工具不會將啟用密碼、UID、姓名、IP 位址、使用者代理字串或瀏覽頁面內容傳送給開發者。啟用密碼僅在擴充功能本機進行雜湊比對，UID 僅用於本機與下載的白名單資料比對。
+啟用密碼會透過 HTTPS 傳送到發布者管理的 Google Apps Script 一次性驗證服務。服務只會回傳驗證成功或失敗，成功後在私人工作表記錄使用時間；密碼不會送到 GitHub 或公開白名單。啟用時可將目前頁面的 UID 一併記錄在私人工作表，用於管理啟用紀錄。
 
 ## Permission justification
 
@@ -21,9 +21,10 @@
 | --- | --- |
 | `storage` | 在本機保存啟用狀態、目前 UID 與短期資料快取，避免使用者每次都輸入密碼。 |
 | `scripting` | 在已通過白名單的課程頁面注入套件內建的固定程式碼，以及主世界橋接程式以讀取課程頁面已有的 ticket/cid 資訊。 |
-| `https://elearn.hrd.gov.tw/*` | 僅在目標線上學習網站執行內容腳本和顯示控制項。 |
+| `https://*.hrd.gov.tw/*` | 僅在 HRD 線上學習平台的首頁、課程頁面與其子網域 frame 執行內容腳本和顯示控制項。此範圍是課程內容由不同 HRD 子網域承載時所必需。 |
 | `https://docs.google.com/*` | 讀取公開 Google Sheets 的白名單與推薦課程資料；請求不帶使用者 Google Cookie。 |
 | `https://raw.githubusercontent.com/*` | 讀取指定 GitHub 儲存庫內的 JSON 設定和題庫資料；請求層另限制為該儲存庫中的 `.json` 路徑。 |
+| `https://script.google.com/macros/s/*`、`https://script.googleusercontent.com/macros/echo*` | 將使用者輸入的啟用密碼透過 HTTPS 傳送至發布者管理的 Apps Script，一次性驗證後只回傳成功或失敗；不讀取或公開 `PASS-KEY` 工作表。前者是部署端點，後者是 Apps Script 的 JSON 回應重新導向端點。 |
 
 ## Reviewer instructions
 

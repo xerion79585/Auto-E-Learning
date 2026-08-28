@@ -35,9 +35,10 @@
     const button = form.querySelector('button');
     button.disabled = true;
     try {
-      const result = await sendMessage({ type: 'auth.verify', password: password.value });
+      const result = await sendMessage({ type: 'auth.verify', password: password.value, uid: '' });
       if (!result || !result.valid) {
-        setStatus('密碼錯誤。', true);
+        const reason = result && result.reason;
+        setStatus(reason === 'used' ? '此密碼已使用過。' : reason === 'server_error' ? '驗證服務暫時無法連線。' : '密碼錯誤。', true);
         return;
       }
       await sendMessage({ type: 'storage.set', key: ACTIVATED_KEY, value: '1' });

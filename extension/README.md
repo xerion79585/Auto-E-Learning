@@ -2,7 +2,7 @@
 
 這個目錄是可由 Chrome「載入未封裝項目」安裝，也可打包上架 Chrome Web Store 的 Manifest V3 擴充程式。它取代原本的 `auto_elearning_loader.user.js`，並保留啟用與白名單流程：
 
-1. 使用者輸入啟用密碼。
+1. 使用者輸入啟用密碼，由發布者管理的 Google Apps Script 一次性驗證服務確認密碼尚未使用。
 2. 擴充程式取得目前登入 UID，並從 Google Sheet 白名單確認 UID。
 3. 只有通過前兩步，才會啟動擴充程式內附的固定版 `auto_elearning_bot.js`。
 
@@ -16,13 +16,15 @@
 4. 開啟 `https://elearn.hrd.gov.tw/`，輸入一次啟用密碼。
 5. 先登入白名單帳號，再重新整理頁面；通過後才會啟動套件內的 bot。啟用狀態會永久保留，之後不再要求密碼。
 
-也可以點擊工具列的「學習小幫手」貓咪圖示，在 popup 內先完成密碼啟用。之後進入支援網站時只會重新檢查目前登入帳號是否仍在白名單內；不在名單內時才會顯示「此帳號不在允許名單內」。
+也可以點擊工具列的「學習小幫手」貓咪圖示，在 popup 內先完成密碼啟用。成功後啟用狀態會永久保留，不會再次要求密碼。之後進入支援網站時只會重新檢查目前登入帳號是否仍在白名單內；不在名單內時才會顯示「此帳號不在允許名單內」。
 
 ## 更新與安全邊界
 
 GitHub 的 `learning-helper-config.json` 只包含設定資料，例如白名單 URL、題庫 URL、推薦課程分頁名稱與功能開關，快取時間為五分鐘。白名單快取一分鐘；網路暫時失敗時，已有快取的白名單可以繼續使用，空白快取則一律阻擋 bot。`questions.json` 這類大型資料會由 service worker 分段傳輸，避免 Chrome runtime 訊息大小限制。
 
-程式邏輯完全包含在擴充程式 bundle 中，符合 Manifest V3 對遠端程式碼的限制。背景程式只接受 Google Sheets 試算表資料與 `xerion79585/Auto-E-Learning` 儲存庫內的 `.json` 資料，不接受任意 URL。bot 邏輯更新需要提高擴充程式版本並透過 Chrome Web Store 或 USB 套件重新發布；設定與資料仍可由遠端 JSON 即時調整。
+程式邏輯完全包含在擴充程式 bundle 中，符合 Manifest V3 對遠端程式碼的限制。課程內容可由 `*.hrd.gov.tw` 的子網域 frame 承載，因此擴充功能僅在 HTTPS 的 HRD 學習平台網域中執行。背景程式只接受公開 Google Sheets 資料、固定的 Apps Script 驗證端點與 `xerion79585/Auto-E-Learning` 儲存庫內的 `.json` 資料，不接受任意 URL。bot 邏輯更新需要提高擴充程式版本並透過 Chrome Web Store 或 USB 套件重新發布；設定與資料仍可由遠端 JSON 即時調整。
+
+Apps Script 驗證部署若重新建立，必須同步更新 `background.js` 中的固定 `/exec` 網址並提高擴充程式版本；遠端設定檔不能改寫密碼驗證網址。
 
 發布前，請將本目錄的 `learning-helper-config.json` 推送到 `main` 分支的 `extension/learning-helper-config.json`。`loader.js` 會固定讀取該 JSON URL；若設定檔暫時無法取得，會改用套件內相同的安全預設值，功能不會改為下載或執行遠端 JavaScript。
 

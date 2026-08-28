@@ -2,23 +2,57 @@
 
 // The extension executes only files bundled in the package. Network requests
 // are limited to validated JSON/data endpoints used by the allowlist, runtime
-// configuration, course list, and question bank.
-const PASSWORD_SALT = '43a9aa7b0866d195ef0785e28b65f4a4';
-const PASSWORD_HASH = '6fcd2f5139c8132f3f415bc0114128f624f4fe00d1591a2e275ded5e711a6845';
+// configuration, course list, question bank, and the one-time activation API.
+const PASS_KEY_VERIFY_URL = 'https://script.google.com/macros/s/AKfycbwCAZXG6fdreo-OI4i4zHyEWKeiPBa6UWpF_X3-SOeuLionNMN7yOl9-99Fj6FX1u4tJQ/exec';
 const LARGE_RESPONSE_THRESHOLD = 4 * 1024 * 1024;
 const LARGE_RESPONSE_CHUNK_SIZE = 512 * 1024;
 const LARGE_RESPONSE_TTL_MS = 5 * 60 * 1000;
 const largeResponses = new Map();
 
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(`${PASSWORD_SALT}${value}`);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+function parseJsonResponse(result) {
+  if (result && result.response && typeof result.response === 'object') {
+    return result.response;
+  }
+  if (!result || typeof result.responseText !== 'string' || !result.responseText) return null;
+  try {
+    return JSON.parse(result.responseText);
+  } catch (_error) {
+    return null;
+  }
 }
 
-async function verifyPassword(password) {
-  if (typeof password !== 'string' || !password) return false;
-  return (await sha256Hex(password)) === PASSWORD_HASH;
+async function verifyPassword(password, uid) {
+  if (typeof password !== 'string' || !password.trim()) {
+    return { valid: false, reason: 'missing_password' };
+  }
+
+  const result = await performRequest({
+    method: 'POST',
+    url: PASS_KEY_VERIFY_URL,
+    // text/plain keeps this cross-origin request simple; Apps Script still
+    // parses the JSON body from e.postData.contents.
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    data: JSON.stringify({
+      password,
+      uid: typeof uid === 'string' ? uid : ''
+    }),
+    responseType: 'json',
+    timeout: 30000
+  });
+
+  if (!result || result.status < 200 || result.status >= 300) {
+    return { valid: false, reason: 'server_error' };
+  }
+
+  const body = parseJsonResponse(result);
+  if (!body || typeof body !== 'object') {
+    return { valid: false, reason: 'server_error' };
+  }
+
+  return {
+    valid: body.valid === true,
+    reason: String(body.reason || (body.valid === true ? 'valid' : 'invalid'))
+  };
 }
 
 function getHeaderValue(headers, name) {
@@ -46,6 +80,8 @@ function isPermittedDataUrl(value) {
   try {
     const url = new URL(String(value || ''));
     if (url.protocol !== 'https:') return false;
+
+    if (value === PASS_KEY_VERIFY_URL) return true;
 
     if (url.hostname === 'docs.google.com') {
       return url.pathname.startsWith('/spreadsheets/');
@@ -181,8 +217,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'auth.verify') {
-    verifyPassword(message.password)
-      .then((valid) => sendResponse({ ok: true, valid }))
+    verifyPassword(message.password, message.uid)
+      .then((result) => sendResponse({
+        ok: true,
+        valid: result.valid,
+        reason: result.reason
+      }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
@@ -236,11 +276,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     const target = { tabId, frameIds: [frameId] };
-    Promise.all([
-      chrome.scripting.executeScript({ target, files: ['page-dialog-bridge.js'], world: 'MAIN' }),
-      chrome.scripting.executeScript({ target, files: ['auto_elearning_bot.js'], world: 'ISOLATED' })
-    ])
-      .then(() => sendResponse({ ok: true }))
+    // Course content can be hosted in a nested frame with a stricter main-world
+    // policy. The bundled bot must still run when its optional dialog bridge is
+    // unavailable in that frame.
+    chrome.scripting.executeScript({ target, files: ['auto_elearning_bot.js'], world: 'ISOLATED' })
+      .then(async () => {
+        try {
+          await chrome.scripting.executeScript({ target, files: ['page-dialog-bridge.js'], world: 'MAIN' });
+          sendResponse({ ok: true, dialogBridge: true });
+        } catch (error) {
+          console.warn('[學習小幫手] dialog bridge unavailable:', error);
+          sendResponse({ ok: true, dialogBridge: false });
+        }
+      })
       .catch((error) => sendResponse({ ok: false, error: String(error && error.message || error) }));
     return true;
   }

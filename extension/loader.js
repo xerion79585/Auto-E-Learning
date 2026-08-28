@@ -21,7 +21,7 @@
   const DEFAULT_CONFIG = Object.freeze({
     schemaVersion: 1,
     configVersion: 'bundled',
-    allowlistUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRSnobSdJ4d_sETE43cvuxnjmNUQK25YU1aYVNHwrDk1lHCw5q_EiLuzY_e4AWkVJ5t6zXefnO68xYH/pub?output=csv',
+    allowlistUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRSnobSdJ4d_sETE43cvuxnjmNUQK25YU1aYVNHwrDk1lHCw5q_EiLuzY_e4AWkVJ5t6zXefnO68xYH/pub?gid=0&single=true&output=csv',
     questionBankUrl: 'https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/questions.json',
     recommendedCoursesSheetName: '推薦課程',
     features: {
@@ -436,9 +436,14 @@
     const password = window.prompt('請輸入學習小幫手啟用密碼：');
     if (!password) return false;
 
-    const result = await sendMessage({ type: 'auth.verify', password });
+    const result = await sendMessage({
+      type: 'auth.verify',
+      password,
+      uid: getKnownUid()
+    });
     if (!result || !result.valid) {
-      window.alert('密碼錯誤');
+      const reason = result && result.reason;
+      window.alert(reason === 'used' ? '此啟用密碼已使用過。' : reason === 'server_error' ? '啟用服務暫時無法連線，請稍後再試。' : '密碼錯誤。');
       return false;
     }
 

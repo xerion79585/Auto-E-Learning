@@ -11,8 +11,8 @@ https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/extension/lea
 ```json
 {
   "schemaVersion": 1,
-  "configVersion": "2026.08.25.1",
-  "allowlistUrl": "https://docs.google.com/spreadsheets/d/.../pub?output=csv",
+  "configVersion": "2026.08.28.1",
+  "allowlistUrl": "https://docs.google.com/spreadsheets/d/.../pub?gid=0&single=true&output=csv",
   "questionBankUrl": "https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/questions.json",
   "recommendedCoursesSheetName": "推薦課程",
   "features": {
@@ -40,4 +40,4 @@ https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/extension/lea
 
 The configuration is data only. It cannot define JavaScript source, executable expressions, module URLs, HTML templates, CSS, selectors, event handlers, extension permissions, match patterns or script filenames. The extension does not use `eval`, `new Function`, dynamic script tags or remote module imports.
 
-The service worker independently blocks requests outside the approved Google Sheets and repository JSON endpoints. Changing this document therefore cannot cause remotely hosted JavaScript to be downloaded or executed.
+The service worker independently blocks requests outside the approved Google Sheets, fixed Apps Script verification endpoint, and repository JSON endpoints. The one-time password endpoint is bundled in the extension and cannot be changed to an arbitrary URL by this configuration file. Changing this document therefore cannot cause remotely hosted JavaScript to be downloaded or executed.
