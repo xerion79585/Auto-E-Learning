@@ -3,7 +3,7 @@
 // The extension executes only files bundled in the package. Network requests
 // are limited to validated JSON/data endpoints used by the allowlist, runtime
 // configuration, course list, question bank, and the one-time activation API.
-const PASS_KEY_VERIFY_URL = 'https://script.google.com/macros/s/AKfycbwCAZXG6fdreo-OI4i4zHyEWKeiPBa6UWpF_X3-SOeuLionNMN7yOl9-99Fj6FX1u4tJQ/exec';
+const PASS_KEY_VERIFY_URL = 'https://script.google.com/macros/s/AKfycbxhLAvt1QJUi2TEWos570WrxuCkY9s7aIDEza1MwWuGv1-Q-wG1oKB5eMk6CZtKZs8U8w/exec';
 const PUBLIC_IP_URL = 'https://api.ipify.org?format=json';
 const LARGE_RESPONSE_THRESHOLD = 4 * 1024 * 1024;
 const LARGE_RESPONSE_CHUNK_SIZE = 512 * 1024;
