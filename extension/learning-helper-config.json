@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "configVersion": "2026.08.28.1",
+  "configVersion": "2026.09.02.1",
   "allowlistUrl": "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSnobSdJ4d_sETE43cvuxnjmNUQK25YU1aYVNHwrDk1lHCw5q_EiLuzY_e4AWkVJ5t6zXefnO68xYH/pub?gid=0&single=true&output=csv",
   "questionBankUrl": "https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/questions.json",
   "recommendedCoursesSheetName": "推薦課程",

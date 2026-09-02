@@ -12,7 +12,7 @@
 
 ## Chrome Web Store
 
-- [ ] 上傳 `dist/學習小幫手-Chrome-Web-Store-1.1.2.zip`；壓縮檔根目錄必須直接包含 `manifest.json`。
+- [ ] 上傳 `dist/學習小幫手-Chrome-Web-Store-1.1.3.zip`；壓縮檔根目錄必須直接包含 `manifest.json`。
 - [ ] 填入 `STORE_LISTING.md` 的短說明、完整說明和權限理由。
 - [ ] 在審核人員說明欄提供啟用密碼、白名單測試 UID、測試帳密和可測試課程網址。
 - [ ] 將 `docs/privacy-policy.html` 透過 GitHub Pages 部署為公開 HTTPS 網頁並填入隱私權政策 URL。
@@ -20,6 +20,6 @@
 
 ## USB 發布
 
-- [ ] 將 `dist/學習小幫手-USB-1.1.2.zip` 複製至 USB。
+- [ ] 將 `dist/學習小幫手-USB-1.1.3.zip` 複製至 USB。
 - [ ] 在一個乾淨的 Chrome 個人資料中依 `USB_INSTALL.md` 載入未封裝項目。
 - [ ] 確認來源資料夾留在固定位置，避免因 USB 拔除或移動資料夾造成擴充功能失效。

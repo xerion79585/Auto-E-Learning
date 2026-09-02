@@ -11,7 +11,7 @@ https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/extension/lea
 ```json
 {
   "schemaVersion": 1,
-  "configVersion": "2026.08.28.1",
+  "configVersion": "2026.09.02.1",
   "allowlistUrl": "https://docs.google.com/spreadsheets/d/.../pub?gid=0&single=true&output=csv",
   "questionBankUrl": "https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/questions.json",
   "recommendedCoursesSheetName": "推薦課程",

@@ -15,6 +15,7 @@
   const CONFIG_CACHE_TIME_KEY = '__learning_helper_config_time__';
   const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000;
   const ALLOWLIST_CACHE_TTL_MS = 60 * 1000;
+  const ALLOWLIST_RECHECK_INTERVAL_MS = 30 * 1000;
   const UID_WAIT_MS = 15000;
 
   const CONFIG_URL = 'https://raw.githubusercontent.com/xerion79585/Auto-E-Learning/main/extension/learning-helper-config.json';
@@ -36,6 +37,8 @@
   let started = false;
   let startPromise = null;
   let gmApisInstalled = false;
+  let allowlistRecheckTimer = null;
+  let allowlistRecheckInFlight = false;
   const IS_TOP_FRAME = (() => {
     try {
       return window.top === window;
@@ -405,10 +408,11 @@
     }
   }
 
-  async function getAllowlist(url) {
+  async function getAllowlist(url, options) {
     const cached = parseCachedAllowlist();
     const cacheTime = Number(values[ALLOWLIST_CACHE_TIME_KEY] || 0);
-    if (cached.length && Date.now() - cacheTime < ALLOWLIST_CACHE_TTL_MS) return cached;
+    const forceRefresh = Boolean(options && options.forceRefresh);
+    if (!forceRefresh && cached.length && Date.now() - cacheTime < ALLOWLIST_CACHE_TTL_MS) return cached;
 
     try {
       const response = await request({
@@ -455,6 +459,50 @@
     await executeBot();
   }
 
+  function stopAllowlistRecheck() {
+    if (allowlistRecheckTimer !== null) {
+      clearTimeout(allowlistRecheckTimer);
+      allowlistRecheckTimer = null;
+    }
+  }
+
+  function scheduleAllowlistRecheck() {
+    if (allowlistRecheckTimer !== null) return;
+
+    allowlistRecheckTimer = setTimeout(async () => {
+      allowlistRecheckTimer = null;
+      if (allowlistRecheckInFlight || String(values[ALLOWED_UID_KEY] || '')) return;
+
+      const uid = getKnownUid();
+      if (!uid) {
+        scheduleAllowlistRecheck();
+        return;
+      }
+
+      allowlistRecheckInFlight = true;
+      try {
+        const allowlist = await getAllowlist(runtimeConfig.allowlistUrl, { forceRefresh: true });
+        if (!allowlist.some((entry) => entry.uid === uid)) {
+          if (IS_TOP_FRAME) showStatus('此帳號不在允許名單內。', 'error');
+          scheduleAllowlistRecheck();
+          return;
+        }
+
+        await setValue(UID_KEY, uid);
+        await setValue(ALLOWED_UID_KEY, uid);
+        removeStatus();
+        stopAllowlistRecheck();
+        await loadAndInjectBot();
+      } catch (error) {
+        // Keep checking after a temporary network or publication failure.
+        console.warn('[學習小幫手] allowlist recheck failed:', error);
+        scheduleAllowlistRecheck();
+      } finally {
+        allowlistRecheckInFlight = false;
+      }
+    }, ALLOWLIST_RECHECK_INTERVAL_MS);
+  }
+
   function isHomePage() {
     const path = window.location.pathname.replace(/\/+$/, '') || '/';
     if (path === '/' || path === '/index.php') return true;
@@ -493,9 +541,11 @@
       if (!allowlist.some((entry) => entry.uid === uid)) {
         await setValue(ALLOWED_UID_KEY, '');
         if (IS_TOP_FRAME) showStatus('此帳號不在允許名單內。', 'error');
+        scheduleAllowlistRecheck();
         return;
       }
       await setValue(ALLOWED_UID_KEY, uid);
+      stopAllowlistRecheck();
       removeStatus();
       await loadAndInjectBot();
     } catch (error) {
