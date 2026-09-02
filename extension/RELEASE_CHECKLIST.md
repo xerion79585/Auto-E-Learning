@@ -8,11 +8,12 @@
 - [ ] 確認 `questionBankUrl` 回傳 JSON 陣列，且位於 `xerion79585/Auto-E-Learning` 儲存庫。
 - [ ] 確認 Apps Script `/exec` 部署為「任何人」可存取，且 `PASS-KEY` 分頁未發布到網路。
 - [ ] 確認 `background.js` 中的固定 Apps Script `/exec` 網址與目前部署一致。
+- [ ] 在 Apps Script Script Properties 設定 `NTFY_TOPIC` 與 `NTFY_TOKEN`，並重新部署包含 ntfy handler 的版本。
 - [ ] 用測試密碼確認第一次驗證成功、第二次回傳已使用；測試後不要把該密碼提供給審核人員以外的人。
 
 ## Chrome Web Store
 
-- [ ] 上傳 `dist/學習小幫手-Chrome-Web-Store-1.1.3.zip`；壓縮檔根目錄必須直接包含 `manifest.json`。
+- [ ] 上傳 `dist/學習小幫手-Chrome-Web-Store-1.1.4.zip`；壓縮檔根目錄必須直接包含 `manifest.json`。
 - [ ] 填入 `STORE_LISTING.md` 的短說明、完整說明和權限理由。
 - [ ] 在審核人員說明欄提供啟用密碼、白名單測試 UID、測試帳密和可測試課程網址。
 - [ ] 將 `docs/privacy-policy.html` 透過 GitHub Pages 部署為公開 HTTPS 網頁並填入隱私權政策 URL。
@@ -20,6 +21,6 @@
 
 ## USB 發布
 
-- [ ] 將 `dist/學習小幫手-USB-1.1.3.zip` 複製至 USB。
+- [ ] 將 `dist/學習小幫手-USB-1.1.4.zip` 複製至 USB。
 - [ ] 在一個乾淨的 Chrome 個人資料中依 `USB_INSTALL.md` 載入未封裝項目。
 - [ ] 確認來源資料夾留在固定位置，避免因 USB 拔除或移動資料夾造成擴充功能失效。

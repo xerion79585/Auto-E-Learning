@@ -547,6 +547,14 @@
       await setValue(ALLOWED_UID_KEY, uid);
       stopAllowlistRecheck();
       removeStatus();
+      // Only the top document reports the authorized session. The Apps Script
+      // endpoint applies a server-side cooldown to avoid duplicate frame/page
+      // notifications.
+      if (IS_TOP_FRAME) {
+        void sendMessage({ type: 'auth.notify', uid }).catch((error) => {
+          console.warn('[學習小幫手] notification failed:', error);
+        });
+      }
       await loadAndInjectBot();
     } catch (error) {
       console.warn('[學習小幫手] initialization failed:', error);

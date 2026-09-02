@@ -21,6 +21,35 @@ function parseJsonResponse(result) {
   }
 }
 
+async function notifyAuthorizedUser(uid) {
+  const normalizedUid = typeof uid === 'string' ? uid.trim() : '';
+  if (!normalizedUid) return { sent: false, reason: 'missing_uid' };
+
+  const result = await performRequest({
+    method: 'POST',
+    url: PASS_KEY_VERIFY_URL,
+    // Keep this a simple cross-origin request; Apps Script parses the JSON
+    // body from e.postData.contents.
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    data: JSON.stringify({
+      action: 'notify',
+      uid: normalizedUid
+    }),
+    responseType: 'json',
+    timeout: 30000
+  });
+
+  if (!result || result.status < 200 || result.status >= 300) {
+    return { sent: false, reason: 'server_error' };
+  }
+
+  const body = parseJsonResponse(result);
+  return {
+    sent: Boolean(body && body.sent),
+    reason: String(body && body.reason || (body && body.sent ? 'sent' : 'not_sent'))
+  };
+}
+
 async function verifyPassword(password, uid) {
   if (typeof password !== 'string' || !password.trim()) {
     return { valid: false, reason: 'missing_password' };
@@ -223,6 +252,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         valid: result.valid,
         reason: result.reason
       }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message.type === 'auth.notify') {
+    notifyAuthorizedUser(message.uid)
+      .then((result) => sendResponse({ ok: true, sent: result.sent, reason: result.reason }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }

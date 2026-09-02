@@ -18,6 +18,15 @@
 
 也可以點擊工具列的「學習小幫手」貓咪圖示，在 popup 內先完成密碼啟用。成功後啟用狀態會永久保留，不會再次要求密碼。之後進入支援網站時只會重新檢查目前登入帳號是否仍在白名單內；不在名單內時才會顯示「此帳號不在允許名單內」。若帳號當下不在名單內，頁面會每 30 秒強制重新檢查一次，加入白名單後不需重新整理頁面即可啟用。
 
+## 使用通知
+
+若要啟用 ntfy 使用通知，請將 `docs/apps-script-passkey-ntfy.gs` 的內容部署到目前的 Apps Script 專案，並在 Apps Script 的「專案設定 → 指令碼屬性」新增：
+
+- `NTFY_TOPIC`：你的私有 ntfy 主題名稱。
+- `NTFY_TOKEN`：ntfy 存取 token。
+
+通知由 Apps Script 伺服器代送，只包含通過白名單的 UID 和時間，並以每個 UID 十分鐘為冷卻時間。ntfy topic 和 token 不會放進 Chrome 擴充功能。更新 Apps Script 後請重新部署為網頁應用程式，維持原本的 `/exec` 網址；若建立了新的部署網址，必須同步更新 `extension/background.js`。
+
 ## 更新與安全邊界
 
 GitHub 的 `learning-helper-config.json` 只包含設定資料，例如白名單 URL、題庫 URL、推薦課程分頁名稱與功能開關，快取時間為五分鐘。白名單快取一分鐘；網路暫時失敗時，已有快取的白名單可以繼續使用，空白快取則一律阻擋 bot。`questions.json` 這類大型資料會由 service worker 分段傳輸，避免 Chrome runtime 訊息大小限制。
