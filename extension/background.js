@@ -4,6 +4,7 @@
 // are limited to validated JSON/data endpoints used by the allowlist, runtime
 // configuration, course list, question bank, and the one-time activation API.
 const PASS_KEY_VERIFY_URL = 'https://script.google.com/macros/s/AKfycbwCAZXG6fdreo-OI4i4zHyEWKeiPBa6UWpF_X3-SOeuLionNMN7yOl9-99Fj6FX1u4tJQ/exec';
+const PUBLIC_IP_URL = 'https://api.ipify.org?format=json';
 const LARGE_RESPONSE_THRESHOLD = 4 * 1024 * 1024;
 const LARGE_RESPONSE_CHUNK_SIZE = 512 * 1024;
 const LARGE_RESPONSE_TTL_MS = 5 * 60 * 1000;
@@ -21,9 +22,29 @@ function parseJsonResponse(result) {
   }
 }
 
-async function notifyAuthorizedUser(uid) {
+async function getPublicIp() {
+  try {
+    const result = await performRequest({
+      method: 'GET',
+      url: PUBLIC_IP_URL,
+      responseType: 'json',
+      timeout: 10000
+    });
+    const body = parseJsonResponse(result);
+    const ip = body && typeof body.ip === 'string' ? body.ip.trim() : '';
+    return ip && ip.length <= 64 ? ip : 'N/A';
+  } catch (_error) {
+    return 'N/A';
+  }
+}
+
+async function notifyAuthorizedUser(uid, name, userAgent) {
   const normalizedUid = typeof uid === 'string' ? uid.trim() : '';
   if (!normalizedUid) return { sent: false, reason: 'missing_uid' };
+
+  const normalizedName = typeof name === 'string' ? name.trim().slice(0, 200) : '';
+  const normalizedUserAgent = typeof userAgent === 'string' ? userAgent.trim().slice(0, 500) : '';
+  const ip = await getPublicIp();
 
   const result = await performRequest({
     method: 'POST',
@@ -33,7 +54,10 @@ async function notifyAuthorizedUser(uid) {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     data: JSON.stringify({
       action: 'notify',
-      uid: normalizedUid
+      uid: normalizedUid,
+      name: normalizedName,
+      ip,
+      userAgent: normalizedUserAgent
     }),
     responseType: 'json',
     timeout: 30000
@@ -114,6 +138,10 @@ function isPermittedDataUrl(value) {
 
     if (url.hostname === 'docs.google.com') {
       return url.pathname.startsWith('/spreadsheets/');
+    }
+
+    if (url.hostname === 'api.ipify.org') {
+      return url.pathname === '/' && url.searchParams.get('format') === 'json';
     }
 
     return url.hostname === 'raw.githubusercontent.com'
@@ -257,7 +285,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'auth.notify') {
-    notifyAuthorizedUser(message.uid)
+    notifyAuthorizedUser(message.uid, message.name, message.userAgent)
       .then((result) => sendResponse({ ok: true, sent: result.sent, reason: result.reason }))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;

@@ -25,7 +25,7 @@
 - `NTFY_TOPIC`：你的私有 ntfy 主題名稱。
 - `NTFY_TOKEN`：ntfy 存取 token。
 
-通知由 Apps Script 伺服器代送，只包含通過白名單的 UID 和時間，並以每個 UID 十分鐘為冷卻時間。ntfy topic 和 token 不會放進 Chrome 擴充功能。更新 Apps Script 後請重新部署為網頁應用程式，維持原本的 `/exec` 網址；若建立了新的部署網址，必須同步更新 `extension/background.js`。
+通知由 Apps Script 伺服器代送，包含通過白名單的姓名、UID、公開 IP、User-Agent 和時間，並以每個 UID 十分鐘為冷卻時間。ntfy topic 和 token 不會放進 Chrome 擴充功能。更新 Apps Script 後請重新部署為網頁應用程式，維持原本的 `/exec` 網址；若建立了新的部署網址，必須同步更新 `extension/background.js`。
 
 ## 更新與安全邊界
 

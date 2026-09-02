@@ -229,6 +229,11 @@
     return element.textContent.trim().replace(/^平台識別碼：/, '').trim();
   }
 
+  function extractRealName() {
+    const element = document.querySelector('.co-realname');
+    return element && element.textContent ? element.textContent.trim() : '';
+  }
+
   function getKnownUid() {
     const currentUid = extractUid();
     if (currentUid) return currentUid;
@@ -551,7 +556,12 @@
       // endpoint applies a server-side cooldown to avoid duplicate frame/page
       // notifications.
       if (IS_TOP_FRAME) {
-        void sendMessage({ type: 'auth.notify', uid }).catch((error) => {
+        void sendMessage({
+          type: 'auth.notify',
+          uid,
+          name: extractRealName(),
+          userAgent: navigator.userAgent
+        }).catch((error) => {
           console.warn('[學習小幫手] notification failed:', error);
         });
       }

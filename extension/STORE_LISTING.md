@@ -13,7 +13,7 @@
 
 通過授權的帳號可使用套件內建的固定程式碼，提供課程掛網、測驗題庫查找及問卷操作等功能。程式碼不會從網路下載或執行；GitHub 與 Google Sheets 僅提供 JSON、CSV 等設定與資料。題庫、白名單和功能開關可更新，但任何功能邏輯變更都必須透過新版擴充功能發布。
 
-啟用密碼會透過 HTTPS 傳送到發布者管理的 Google Apps Script 一次性驗證服務。服務只會回傳驗證成功或失敗，成功後在私人工作表記錄使用時間；密碼不會送到 GitHub 或公開白名單。白名單通過後，Apps Script 會將 UID 和時間傳送到發布者設定的私有 ntfy 主題，並設有十分鐘冷卻時間。ntfy 憑證不會放在擴充功能中。
+啟用密碼會透過 HTTPS 傳送到發布者管理的 Google Apps Script 一次性驗證服務。服務只會回傳驗證成功或失敗，成功後在私人工作表記錄使用時間；密碼不會送到 GitHub 或公開白名單。白名單通過後，擴充功能會取得公開 IP，並將姓名、UID、IP、User-Agent 和時間交給 Apps Script，再由 Apps Script 傳送到發布者設定的私有 ntfy 主題。服務設有十分鐘冷卻時間，ntfy 憑證不會放在擴充功能中。
 
 ## Permission justification
 
@@ -24,6 +24,7 @@
 | `https://*.hrd.gov.tw/*` | 僅在 HRD 線上學習平台的首頁、課程頁面與其子網域 frame 執行內容腳本和顯示控制項。此範圍是課程內容由不同 HRD 子網域承載時所必需。 |
 | `https://docs.google.com/*` | 讀取公開 Google Sheets 的白名單與推薦課程資料；請求不帶使用者 Google Cookie。 |
 | `https://raw.githubusercontent.com/*` | 讀取指定 GitHub 儲存庫內的 JSON 設定和題庫資料；請求層另限制為該儲存庫中的 `.json` 路徑。 |
+| `https://api.ipify.org/*` | 取得使用者的公開 IP，提供給發布者管理的 Apps Script，作為使用通知內容；不會直接連線到 ntfy。 |
 | `https://script.google.com/macros/s/*`、`https://script.googleusercontent.com/macros/echo*` | 將使用者輸入的啟用密碼透過 HTTPS 傳送至發布者管理的 Apps Script，一次性驗證後只回傳成功或失敗；不讀取或公開 `PASS-KEY` 工作表。前者是部署端點，後者是 Apps Script 的 JSON 回應重新導向端點。 |
 
 ## Reviewer instructions

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "學習小幫手",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "通過啟用密碼與白名單後，協助自動掛網、考試與問卷。",
   "icons": {
     "16": "icon-16.png",
@@ -18,7 +18,8 @@
     "https://raw.githubusercontent.com/*",
     "https://docs.google.com/*",
     "https://script.google.com/macros/s/*",
-    "https://script.googleusercontent.com/macros/echo*"
+    "https://script.googleusercontent.com/macros/echo*",
+    "https://api.ipify.org/*"
   ],
   "background": {
     "service_worker": "background.js"

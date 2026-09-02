@@ -96,10 +96,20 @@ function handleNotify(body) {
 
   const timezone = Session.getScriptTimeZone() || 'Asia/Taipei';
   const timestamp = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd HH:mm:ss');
+  const name = String(body.name || '').trim().slice(0, 200) || 'N/A';
+  const ip = String(body.ip || '').trim().slice(0, 64) || 'N/A';
+  const userAgent = String(body.userAgent || '').trim().slice(0, 500) || 'N/A';
   const response = UrlFetchApp.fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
     method: 'post',
     contentType: 'text/plain; charset=utf-8',
-    payload: `學習小幫手使用通知\nUID: ${uid}\nTime: ${timestamp}`,
+    payload: [
+      '學習小幫手使用通知',
+      `Name: ${name}`,
+      `UID: ${uid}`,
+      `IP: ${ip}`,
+      `User-Agent: ${userAgent}`,
+      `Time: ${timestamp}`
+    ].join('\n'),
     headers: {
       Authorization: `Bearer ${token}`,
       Title: '學習小幫手使用通知',
